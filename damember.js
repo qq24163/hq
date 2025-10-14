@@ -7,68 +7,59 @@ hostname = m.aihoge.com
 [rewrite_local]
 ^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
-// capture-member-simple.js - 极简通知版本
+// capture-member-raw.js - 极简版本，存储原始member数据
 if ($request.headers?.["member"]) {
+    const rawMember = $request.headers["member"];
+    
+    // 直接存储原始数据
+    $prefs.setValueForKey(rawMember, 'damember_current');
+    
+    // 多账号数组管理
+    let allMembers = [];
     try {
-        const memberHeader = $request.headers["member"];
-        const memberInfo = JSON.parse(decodeURIComponent(memberHeader));
+        const stored = $prefs.valueForKey('damember_array');
+        if (stored) allMembers = JSON.parse(stored);
+    } catch (e) {}
+    
+    if (!Array.isArray(allMembers)) allMembers = [];
+    
+    // 基于openid去重
+    let isNew = true;
+    try {
+        const currentObj = JSON.parse(decodeURIComponent(rawMember));
+        const currentOpenId = currentObj.mark;
         
-        // 构建存储数据
-        const storageData = {
-            id: memberInfo.id,
-            openid: memberInfo.mark,
-            nickname: decodeURIComponent(memberInfo.nick_name || ""),
-            appId: memberInfo.appId,
-            time: new Date().toLocaleTimeString('zh-CN')
-        };
-        
-        const memberJson = JSON.stringify(storageData);
-        
-        // 保存到BoxJS
-        $prefs.setValueForKey(memberJson, 'damember_current');
-        
-        // 多账号管理
-        let allMembers = [];
-        try {
-            const stored = $prefs.valueForKey('damember_array');
-            if (stored) allMembers = JSON.parse(stored);
-        } catch (e) {}
-        
-        if (!Array.isArray(allMembers)) allMembers = [];
-        
-        // 基于openid去重
         const existingIndex = allMembers.findIndex(m => {
             try {
-                return JSON.parse(m).openid === memberInfo.mark;
+                return JSON.parse(decodeURIComponent(m)).mark === currentOpenId;
             } catch (e) {
                 return false;
             }
         });
         
         if (existingIndex >= 0) {
-            // 更新现有账号
-            allMembers[existingIndex] = memberJson;
+            allMembers[existingIndex] = rawMember; // 更新
+            isNew = false;
         } else {
-            // 添加新账号
             if (allMembers.length >= 10) allMembers.shift();
-            allMembers.push(memberJson);
+            allMembers.push(rawMember); // 新增
         }
-        
-        $prefs.setValueForKey(JSON.stringify(allMembers), 'damember_array');
-        
-        // 单条通知
-        $notify(
-            "📱 会员数据",
-            `${storageData.nickname}`,
-            `OpenID: ${memberInfo.mark.substring(0, 10)}...\n账号: ${allMembers.length}/10`
-        );
-        
-        $tool.copy(memberInfo.mark);
-        
     } catch (e) {
-        $notify("❌ 数据异常", "查看日志详情", "");
-        console.log(`[MEMBER_ERROR] ${e}`);
+        // 如果解析失败，直接添加到数组
+        if (allMembers.length >= 10) allMembers.shift();
+        allMembers.push(rawMember);
     }
+    
+    $prefs.setValueForKey(JSON.stringify(allMembers), 'damember_array');
+    
+    // 单条通知
+    $notify(
+        "📱 Member数据",
+        `${isNew ? "新增" : "更新"}账号`,
+        `总数: ${allMembers.length}`
+    );
+    
+    $tool.copy(rawMember);
 }
 
 $done({});
