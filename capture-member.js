@@ -6,7 +6,7 @@
 hostname = m.aihoge.com
 
 [rewrite_local]
-^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-response-body capture-member.js
+^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-member.js
 */
 const memberHeader = $request.headers?.["member"];
 
