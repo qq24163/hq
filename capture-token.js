@@ -8,42 +8,48 @@ hostname = m.client.10010.com
 ^https:\/\/m\.client\.10010\.com\/mobileService\/onLine\.htm url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-token.js
 */
 // capture-token.js
-const method = $request.method;
-let tokenOnline = null;
-
-if (method === 'POST' && $request.body) {
+// capture-token-enhanced.js
+function extractToken(body) {
+    let token = null;
+    
+    // 方法1: JSON格式
     try {
-        // 尝试解析JSON格式
-        const body = JSON.parse($request.body);
-        tokenOnline = body.token_online || body.token;
-    } catch (e) {
-        // 尝试解析表单格式
+        const jsonData = JSON.parse(body);
+        token = jsonData.token_online || jsonData.token || jsonData.data?.token;
+    } catch (e) {}
+    
+    // 方法2: 表单格式
+    if (!token) {
         try {
-            const params = new URLSearchParams($request.body);
-            tokenOnline = params.get('token_online') || params.get('token');
-        } catch (e2) {
-            console.log(`[ERROR] 解析失败: ${e2}`);
-        }
+            const params = new URLSearchParams(body);
+            token = params.get('token_online') || params.get('token');
+        } catch (e) {}
     }
+    
+    // 方法3: 正则匹配（兜底方案）
+    if (!token) {
+        const tokenMatch = body.match(/token_online=([^&]*)/) || body.match(/token=([^&]*)/);
+        if (tokenMatch) token = decodeURIComponent(tokenMatch[1]);
+    }
+    
+    return token;
 }
 
-if (tokenOnline) {
-    // 存储token
-    $persistentStore.write(tokenOnline, "online_token");
+// 主逻辑
+if ($request.method === 'POST' && $request.body) {
+    const token = extractToken($request.body);
     
-    // 发送通知
-    $notify(
-        "联通在线Token捕获",
-        `请求URL: ${$request.url}`,
-        `Token: ${tokenOnline}`
-    );
-    
-    // 自动复制到剪贴板
-    $tool.copy(tokenOnline);
-    
-    console.log(`[SUCCESS] Token捕获: ${tokenOnline}`);
-} else {
-    console.log(`[DEBUG] 未找到token_online\n请求方法: ${method}\n请求体: ${$request.body}`);
+    if (token) {
+        $persistentStore.write(token, "china_unicom_token");
+        $notify("联通Token", "捕获成功", token);
+        $tool.copy(token);
+        
+        // 记录捕获时间
+        const timestamp = new Date().toLocaleString();
+        $persistentStore.write(timestamp, "token_capture_time");
+    } else {
+        console.log(`[DEBUG] 原始请求体:\n${$request.body}`);
+    }
 }
 
 $done({});
