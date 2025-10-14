@@ -5,7 +5,7 @@
 hostname = m.client.10010.com
 
 [rewrite_local]
-^https:\/\/m\.client\.10010\.com\/mobileService\/onLine\.htm url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/unicom-token-manager.js
+^https:\/\/m\.client\.10010\.com\/mobileService\/onLine\.htm url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/unicom-token.js
 */
 // unicom-token-minimal.js - 极简版本
 if ($request.method === 'POST' && $request.body) {
