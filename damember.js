@@ -7,13 +7,14 @@ hostname = m.aihoge.com
 [rewrite_local]
 ^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
-// capture-member-compact.js - 紧凑格式JSON数组
+// capture-member-encoded.js - 保持nick_name URL编码
 const memberHeader = $request.headers?.["member"];
 
 if (memberHeader) {
     try {
-        // 解析原始member数据为对象
-        const memberObj = JSON.parse(decodeURIComponent(memberHeader));
+        // 直接使用原始member数据（保持URL编码）
+        const memberData = memberHeader;
+        const memberObj = JSON.parse(memberData);
         
         // 存储当前member（紧凑格式）
         $prefs.setValueForKey(JSON.stringify(memberObj), 'damember_current');
@@ -41,11 +42,15 @@ if (memberHeader) {
         // 保存紧凑格式数组（无空格）
         $prefs.setValueForKey(JSON.stringify(allMembers), 'damember_array');
         
-        // 单条通知
-        const nickname = decodeURIComponent(memberObj.nick_name || "用户");
+        // 单条通知（显示解码后的昵称，但存储保持编码）
+        let displayName = memberObj.nick_name;
+        try {
+            displayName = decodeURIComponent(memberObj.nick_name);
+        } catch (e) {}
+        
         $notify(
             "📱 Member数据",
-            `${isNew ? "新增" : "更新"} ${nickname}`,
+            `${isNew ? "新增" : "更新"} ${displayName}`,
             `总数: ${allMembers.length}`
         );
         
