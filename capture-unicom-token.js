@@ -2,10 +2,10 @@
 -------------- Quantumult X 配置 --------------
 
 [MITM]
-hostname = m.client.10010.com
+hostname = m.client.10010.com, *.10010.com
 
 [rewrite_local]
-^https:\/\/m\.client\.10010\.com\/mobileService\/onLine\.htm url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-token.js
+^https:\/\/m\.client\.10010\.com\/mobileService\/onLine\.htm url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-unicom-token.js
 */
 // capture-unicom-token.js
 const method = $request.method;
