@@ -5,7 +5,7 @@
 hostname = m.aihoge.com
 
 [rewrite_local]
-^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
+^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
 // capture-member-raw.js - 极简版本，存储原始member数据
 if ($request.headers?.["member"]) {
