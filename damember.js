@@ -7,75 +7,53 @@ hostname = m.aihoge.com
 [rewrite_local]
 ^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
-// capture-member-pure.js - 存储纯净的原始JSON对象
+// capture-member-compact.js - 紧凑格式JSON数组
 const memberHeader = $request.headers?.["member"];
 
 if (memberHeader) {
     try {
-        // 解码并解析member数据
-        const decodedMember = decodeURIComponent(memberHeader);
-        const memberObj = JSON.parse(decodedMember);
+        // 解析原始member数据为对象
+        const memberObj = JSON.parse(decodeURIComponent(memberHeader));
         
-        // 解码昵称（保持原始字段）
-        if (memberObj.nick_name && memberObj.nick_name.includes('%')) {
-            memberObj.nick_name = decodeURIComponent(memberObj.nick_name);
-        }
+        // 存储当前member（紧凑格式）
+        $prefs.setValueForKey(JSON.stringify(memberObj), 'damember_current');
         
-        const memberJson = JSON.stringify(memberObj, null, 2);
-        
-        // 存储到BoxJS - 当前member
-        $prefs.setValueForKey(memberJson, 'damember_current');
-        
-        // 多账号数组管理
+        // 获取现有数组
         let allMembers = [];
         try {
             const stored = $prefs.valueForKey('damember_array');
-            if (stored) {
-                allMembers = JSON.parse(stored);
-                if (!Array.isArray(allMembers)) allMembers = [];
-            }
-        } catch (e) {
-            allMembers = [];
-        }
+            if (stored) allMembers = JSON.parse(stored);
+        } catch (e) {}
         
-        // 基于openid去重
-        const currentOpenId = memberObj.mark;
-        const existingIndex = allMembers.findIndex(m => {
-            try {
-                const existingObj = typeof m === 'string' ? JSON.parse(m) : m;
-                return existingObj.mark === currentOpenId;
-            } catch (e) {
-                return false;
-            }
-        });
+        if (!Array.isArray(allMembers)) allMembers = [];
         
-        let isNewMember = existingIndex === -1;
+        // 去重逻辑
+        const existingIndex = allMembers.findIndex(m => m.mark === memberObj.mark);
+        const isNew = existingIndex === -1;
         
-        if (isNewMember) {
-            // 新账号 - 添加到数组
+        if (isNew) {
             if (allMembers.length >= 10) allMembers.shift();
-            allMembers.push(memberObj); // 直接存储对象
+            allMembers.push(memberObj);
         } else {
-            // 已存在 - 更新数据
             allMembers[existingIndex] = memberObj;
         }
         
-        // 保存多账号数组
-        $prefs.setValueForKey(JSON.stringify(allMembers, null, 2), 'damember_array');
+        // 保存紧凑格式数组（无空格）
+        $prefs.setValueForKey(JSON.stringify(allMembers), 'damember_array');
         
-        // 单条精简通知
+        // 单条通知
+        const nickname = decodeURIComponent(memberObj.nick_name || "用户");
         $notify(
-            isNewMember ? "✅ 新会员数据" : "🔄 会员数据",
-            `${memberObj.nick_name || "用户"}`,
-            `OpenID: ${currentOpenId.substring(0, 10)}...\n账号数: ${allMembers.length}`
+            "📱 Member数据",
+            `${isNew ? "新增" : "更新"} ${nickname}`,
+            `总数: ${allMembers.length}`
         );
         
-        // 自动复制当前member数据到剪贴板
-        $tool.copy(memberJson);
+        // 复制紧凑格式的当前member
+        $tool.copy(JSON.stringify(memberObj));
         
     } catch (e) {
-        $notify("❌ 数据异常", "查看日志详情", "");
-        console.log(`[MEMBER_ERROR] ${e}\n原始数据: ${memberHeader}`);
+        console.log(`[ERROR] ${e}`);
     }
 }
 
