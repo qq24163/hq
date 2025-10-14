@@ -7,56 +7,66 @@ hostname = m.client.10010.com, *.10010.com
 [rewrite_local]
 ^https:\/\/m\.client\.10010\.com\/mobileService\/onLine\.htm url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-unicom-token.js
 */
-// capture-unicom-token.js
-const method = $request.method;
-let tokenOnline = null;
-
-if (method === 'POST' && $request.body) {
+// capture-unicom-token-enhanced.js
+function extractTokenOnline(body) {
+    let token = null;
+    
+    // 方法1: URLSearchParams（针对你的表单格式）
     try {
-        // 解析URL编码的表单数据
-        const params = new URLSearchParams($request.body);
-        tokenOnline = params.get('token_online');
-        
-        if (tokenOnline) {
-            console.log(`[SUCCESS] 成功捕获token_online`);
-        } else {
-            // 调试：输出所有参数名
-            const allParams = {};
-            for (let [key, value] of params) {
-                allParams[key] = key === 'token_online' ? value : '***';
-            }
-            console.log(`[DEBUG] 所有参数: ${JSON.stringify(allParams)}`);
-        }
-    } catch (e) {
-        console.log(`[ERROR] 解析失败: ${e}\n原始数据: ${$request.body}`);
+        const params = new URLSearchParams(body);
+        token = params.get('token_online');
+        if (token) return token;
+    } catch (e) {}
+    
+    // 方法2: 正则匹配（兜底方案）
+    const tokenMatch = body.match(/token_online=([^&]*)/);
+    if (tokenMatch && tokenMatch[1]) {
+        token = decodeURIComponent(tokenMatch[1]);
     }
+    
+    // 方法3: 分割字符串（最终保障）
+    if (!token && body.includes('token_online=')) {
+        const parts = body.split('token_online=');
+        if (parts[1]) {
+            token = parts[1].split('&')[0];
+        }
+    }
+    
+    return token;
 }
 
-if (tokenOnline) {
-    // 存储token
-    $persistentStore.write(tokenOnline, "unicom_token_online");
+// 主逻辑
+if ($request.method === 'POST' && $request.body) {
+    const tokenOnline = extractTokenOnline($request.body);
     
-    // 发送通知（显示前20位，避免通知过长）
-    const shortToken = tokenOnline.substring(0, 20) + '...';
-    $notify(
-        "联通在线Token捕获",
-        `长度: ${tokenOnline.length} 字符`,
-        `Token: ${shortToken}\n点击通知复制完整Token`
-    );
-    
-    // 自动复制完整token到剪贴板
-    $tool.copy(tokenOnline);
-    
-    // 记录捕获信息
-    const captureInfo = {
-        timestamp: new Date().toLocaleString('zh-CN'),
-        token_length: tokenOnline.length,
-        token_prefix: tokenOnline.substring(0, 10)
-    };
-    $persistentStore.write(JSON.stringify(captureInfo), "token_capture_info");
-    
+    if (tokenOnline) {
+        // 存储数据
+        $persistentStore.write(tokenOnline, "unicom_token_online");
+        
+        // 验证token格式（通常是长字符串）
+        const isValidToken = tokenOnline.length > 50 && /^[a-fA-F0-9]+$/.test(tokenOnline);
+        
+        $notify(
+            isValidToken ? "✅ 联通Token捕获成功" : "⚠️ Token格式异常",
+            `长度: ${tokenOnline.length} 字符`,
+            `前20位: ${tokenOnline.substring(0, 20)}...\n已自动复制到剪贴板`
+        );
+        
+        $tool.copy(tokenOnline);
+        
+        // 调试信息
+        console.log(`[TOKEN_DEBUG] 
+Token长度: ${tokenOnline.length}
+Token前缀: ${tokenOnline.substring(0, 10)}
+完整Token: ${tokenOnline}
+请求URL: ${$request.url}`);
+        
+    } else {
+        console.log(`[DEBUG] 原始请求体:\n${$request.body}`);
+        $notify("❌ Token捕获失败", "未找到token_online参数", "请查看日志");
+    }
 } else {
-    $notify("联通Token捕获失败", "", "请检查请求体格式");
+    console.log(`[DEBUG] 非POST请求或无请求体\nMethod: ${$request.method}\nURL: ${$request.url}`);
 }
 
 $done({});
