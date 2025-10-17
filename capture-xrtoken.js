@@ -1,3 +1,12 @@
+/*
+-------------- Quantumult X 配置 --------------
+
+[MITM]
+hostname = jiuyixiaoer.fzjingzhou.com
+
+[rewrite_local]
+^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/Person\/sign url script-request-body capture-xrtoken.js
+*/
 // capture-xrtoken.js - 捕获XRTOKEN，多账号用@分隔
 const method = $request.method;
 let tokenValue = null;
