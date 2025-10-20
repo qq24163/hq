@@ -7,55 +7,93 @@ hostname = api.digital4danone.com.cn
 [rewrite_local]
 ^https:\/\/api\.digital4danone\.com\.cn\/healthyaging\/danone\/wx\/config\/eventReport url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/dnystoken.js
 */
-// capture-dnystoken-simple.js - 极简版本
-const url = $request.url;
-
-if (url.includes('api.digital4danone.com.cn/healthyaging/danone/wx/config/eventReport')) {
+// capture-dnystoken-debug.js - 调试版本
+(function() {
+    'use strict';
+    
+    const url = $request.url;
+    
+    if (!url.includes('api.digital4danone.com.cn/healthyaging/danone/wx/config/eventReport')) {
+        $done({});
+        return;
+    }
+    
     try {
         const headers = $request.headers;
         const body = $request.body;
         
-        // 获取头部token
-        const xToken = headers['X-Access-Token'] || headers['x-access-token'];
+        console.log('[DNYSTOKEN] 开始捕获数据...');
+        
+        // 调试：输出所有请求头
+        console.log('[DNYSTOKEN] 请求头:', JSON.stringify(headers, null, 2));
+        
+        // 从请求头获取X-Access-Token
+        const xAccessToken = headers['X-Access-Token'] || headers['x-access-token'];
+        console.log(`[DNYSTOKEN] X-Access-Token: ${xAccessToken ? xAccessToken.substring(0, 20) + '...' : '未找到'}`);
         
         let openId = '';
         let unionId = '';
         
-        // 获取请求体参数
+        // 从JSON请求体获取openId和unionId
         if (body) {
-            const params = new URLSearchParams(body);
-            openId = params.get('openId') || params.get('openid') || '';
-            unionId = params.get('unionId') || params.get('unionid') || '';
+            console.log('[DNYSTOKEN] 原始请求体:', body);
+            
+            try {
+                const jsonBody = JSON.parse(body);
+                console.log('[DNYSTOKEN] 解析后的JSON:', JSON.stringify(jsonBody, null, 2));
+                
+                openId = jsonBody.openId || '';
+                unionId = jsonBody.unionId || '';
+                
+                console.log(`[DNYSTOKEN] openId: ${openId || '未找到'}`);
+                console.log(`[DNYSTOKEN] unionId: ${unionId || '未找到'}`);
+                
+            } catch (e) {
+                console.log('[DNYSTOKEN] JSON解析失败:', e);
+            }
+        } else {
+            console.log('[DNYSTOKEN] 无请求体数据');
         }
         
-        // 构建组合
-        const tokenCombination = `${xToken || ''}#${openId}#${unionId}`;
+        // 构建token组合
+        const tokenCombination = `${xAccessToken || ''}#${openId}#${unionId}`;
         
         // 检查是否有有效数据
-        if (xToken || openId || unionId) {
-            // 保存当前组合
-            $prefs.setValueForKey(tokenCombination, 'dnystoken_current');
-            
-            // 多账号管理
-            let allTokens = ($prefs.valueForKey('DNYSTOKEN') || '').split('&').filter(t => t);
-            if (!allTokens.includes(tokenCombination)) {
-                if (allTokens.length >= 10) allTokens.shift();
-                allTokens.push(tokenCombination);
-                $prefs.setValueForKey(allTokens.join('&'), 'DNYSTOKEN');
-            }
-            
-            // 单条通知
-            $notify(
-                '📱 DNYSTOKEN',
-                `账号${allTokens.length}个`,
-                tokenCombination.substring(0, 30) + '...'
-            );
-            
-            $tool.copy(tokenCombination);
+        if (!xAccessToken && !openId && !unionId) {
+            console.log('[DNYSTOKEN] 未找到任何有效参数');
+            $done({});
+            return;
         }
-    } catch (e) {
-        console.log('[DNYSTOKEN Error] ' + e);
+        
+        console.log(`[DNYSTOKEN] 最终组合: ${tokenCombination}`);
+        
+        // 保存到BoxJS
+        $prefs.setValueForKey(tokenCombination, 'dnystoken_current');
+        
+        // 多账号管理
+        const storedTokens = $prefs.valueForKey('DNYSTOKEN') || '';
+        let tokensArray = storedTokens ? storedTokens.split('&').filter(t => t.trim() !== '') : [];
+        
+        const isNewToken = !tokensArray.includes(tokenCombination);
+        
+        if (isNewToken) {
+            if (tokensArray.length >= 10) tokensArray.shift();
+            tokensArray.push(tokenCombination);
+            $prefs.setValueForKey(tokensArray.join('&'), 'DNYSTOKEN');
+        }
+        
+        // 单条通知
+        $notify(
+            isNewToken ? "✅ 新DNYSTOKEN" : "🔄 DNYSTOKEN",
+            `账号数: ${tokensArray.length}`,
+            `组合: ${tokenCombination.substring(0, 25)}...`
+        );
+        
+        $tool.copy(tokenCombination);
+        
+    } catch (error) {
+        console.log(`[DNYSTOKEN] 全局错误: ${error}`);
     }
-}
-
-$done({});
+    
+    $done({});
+})();
