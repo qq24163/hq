@@ -7,7 +7,7 @@ hostname = www.52bjy.com
 [rewrite_local]
 ^https:\/\/www\.52bjy\.com\/api\/avatar\/show\.php.*username= url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-hsytoken-simple.js
 */
-// capture-hsytoken-minimal.js - 极简20秒限制
+// capture-hsytoken-group-minimal.js - 极简分组5秒限制
 const url = $request.url;
 
 if (url.includes('www.52bjy.com/api/avatar/show.php')) {
@@ -16,17 +16,21 @@ if (url.includes('www.52bjy.com/api/avatar/show.php')) {
         
         if (username) {
             const now = Date.now();
-            const lastTime = parseInt($prefs.valueForKey('hsy_last_time') || '0');
             
-            // 20秒时间窗口检查
-            if (now - lastTime < 20000) {
-                console.log('[HSYTOKEN] 20秒限制，跳过');
+            // 获取该账号的上次请求时间
+            const timersStr = $prefs.valueForKey('hsy_group_timers') || '{}';
+            const timers = JSON.parse(timersStr);
+            
+            // 5秒时间窗口检查
+            if (timers[username] && (now - timers[username] < 5000)) {
+                console.log(`[HSYTOKEN] ${username} 5秒限制，跳过`);
                 $done({});
                 return;
             }
             
-            // 更新请求时间
-            $prefs.setValueForKey(now.toString(), 'hsy_last_time');
+            // 更新该账号的请求时间
+            timers[username] = now;
+            $prefs.setValueForKey(JSON.stringify(timers), 'hsy_group_timers');
             
             // 保存数据
             $prefs.setValueForKey(username, 'hsytoken_current');
