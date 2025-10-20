@@ -24,7 +24,7 @@ if (url.includes('jiuyixiaoer.fzjingzhou.com/api/login/getWxMiniProgramSessionKe
             if (!allTokens.includes(token)) {
                 if (allTokens.length >= 10) allTokens.shift();
                 allTokens.push(token);
-                $prefs.setValueForKey(allTokens.join('#'), 'XRTOKEN');
+                $prefs.setValueForKey(allTokens.join('@'), 'XRTOKEN');
             }
             
             // 单条通知
