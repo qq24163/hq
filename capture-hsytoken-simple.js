@@ -19,7 +19,7 @@ if (url.includes('www.52bjy.com/api/avatar/show.php')) {
             const lastTime = $prefs.valueForKey('hsy_last_time');
             
             // 30秒时间窗口检查
-            if (lastTime && (now - parseInt(lastTime) < 15000)) {
+            if (lastTime && (now - parseInt(lastTime) < 10000)) {
                 console.log('[HSYTOKEN] 30秒内跳过');
                 $done({});
                 return;
