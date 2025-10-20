@@ -16,7 +16,7 @@ if (url.includes('www.52bjy.com/api/avatar/show.php')) {
         
         if (username) {
             const now = Date.now();
-            const windowTime = 5000; // 5秒
+            const windowTime = 10000; // 5秒
             
             // 获取账号最后保存时间
             const lastSavesStr = $prefs.valueForKey('hsytoken_last_saves') || '{}';
