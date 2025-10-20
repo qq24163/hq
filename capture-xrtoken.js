@@ -20,7 +20,7 @@ if (url.includes('jiuyixiaoer.fzjingzhou.com/api/login/getWxMiniProgramSessionKe
             $prefs.setValueForKey(token, 'xrtoken_current');
             
             // 多账号管理
-            let allTokens = ($prefs.valueForKey('XRTOKEN') || '').split('#').filter(t => t);
+            let allTokens = ($prefs.valueForKey('XRTOKEN') || '').split('@').filter(t => t);
             if (!allTokens.includes(token)) {
                 if (allTokens.length >= 10) allTokens.shift();
                 allTokens.push(token);
