@@ -13,8 +13,8 @@ const url = $request.url;
 if (url.includes('lmf.lvmifo.com/api/5dca57afa379e') && url.includes('m=getzs')) {
     try {
         const headers = $request.headers;
-        const accessToken = headers['access_token'];
-        const userToken = headers['user_token'];
+        const accessToken = headers['access-token'];
+        const userToken = headers['user-token'];
         
         if (accessToken || userToken) {
             const tokenCombination = `${accessToken || ''}&${userToken || ''}`;
