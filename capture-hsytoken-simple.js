@@ -7,7 +7,7 @@ hostname = www.52bjy.com
 [rewrite_local]
 ^https:\/\/www\.52bjy\.com\/api\/avatar\/show\.php.*username= url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-hsytoken-simple.js
 */
-// capture-hsytoken-session.js - 基于会话去重（推荐）
+// capture-hsytoken-simplecount.js - 简单计数控制
 (function() {
     'use strict';
     
@@ -25,38 +25,36 @@ hostname = www.52bjy.com
             return;
         }
         
-        // 获取当前会话已记录的username
-        const sessionKey = 'hsytoken_session_usernames';
-        let sessionUsernames = JSON.parse($prefs.valueForKey(sessionKey) || '[]');
+        // 简单的计数控制
+        const maxUsernames = 5; // 最多记录5个不同的username
+        let allUsernames = ($prefs.valueForKey('HSYTOKEN') || '').split('#').filter(u => u);
         
-        const isNewInSession = !sessionUsernames.includes(username);
+        const isNewUsername = !allUsernames.includes(username);
         
-        if (isNewInSession) {
-            // 添加到会话记录
-            sessionUsernames.push(username);
-            $prefs.setValueForKey(JSON.stringify(sessionUsernames), sessionKey);
-            
-            // 保存到永久存储
-            let allUsernames = ($prefs.valueForKey('HSYTOKEN') || '').split('#').filter(u => u);
-            if (!allUsernames.includes(username)) {
-                if (allUsernames.length >= 10) allUsernames.shift();
-                allUsernames.push(username);
-                $prefs.setValueForKey(allUsernames.join('#'), 'HSYTOKEN');
-            }
-            
+        if (isNewUsername && allUsernames.length < maxUsernames) {
+            // 新username且在限额内
+            allUsernames.push(username);
+            $prefs.setValueForKey(allUsernames.join('#'), 'HSYTOKEN');
             $prefs.setValueForKey(username, 'hsytoken_current');
             
-            // 单条通知
             $notify(
-                "✅ 新HSYTOKEN",
-                `账号${allUsernames.length}个`,
+                "✅ HSYTOKEN记录",
+                `已记录: ${allUsernames.length}/${maxUsernames}`,
                 `Username: ${username}`
             );
             
             $tool.copy(username);
-            console.log(`[HSYTOKEN] 会话中新username: ${username}`);
+            console.log(`[HSYTOKEN] 新记录: ${username}`);
+        } else if (isNewUsername) {
+            // 超过限额，提示用户
+            $notify(
+                "⚠️ HSYTOKEN限额",
+                `已达最大记录数: ${maxUsernames}`,
+                `当前Username: ${username}`
+            );
+            console.log(`[HSYTOKEN] 超过限额: ${username}`);
         } else {
-            console.log(`[HSYTOKEN] 会话中已存在: ${username}`);
+            console.log(`[HSYTOKEN] 已存在: ${username}`);
         }
         
     } catch (e) {
