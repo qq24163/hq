@@ -26,7 +26,7 @@ hostname = www.52bjy.com
         }
         
         // 简单的计数控制
-        const maxUsernames = 5; // 最多记录5个不同的username
+        const maxUsernames = 1; // 最多记录1个不同的username
         let allUsernames = ($prefs.valueForKey('HSYTOKEN') || '').split('#').filter(u => u);
         
         const isNewUsername = !allUsernames.includes(username);
