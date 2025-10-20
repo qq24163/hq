@@ -27,7 +27,7 @@ if (url.includes('www.52bjy.com/api/avatar/show.php')) {
             const lastSaveStr = $prefs.valueForKey('hsytoken_last_save') || '0';
             const lastSave = parseInt(lastSaveStr);
             
-            if (now - lastSave >= 10000) {
+            if (now - lastSave >= 2000) {
                 // 设置10秒后保存
                 $prefs.setValueForKey(now.toString(), 'hsytoken_last_save');
                 
@@ -37,7 +37,7 @@ if (url.includes('www.52bjy.com/api/avatar/show.php')) {
                         const finalTimeStr = $prefs.valueForKey('hsytoken_temp_time') || '0';
                         const finalTime = parseInt(finalTimeStr);
                         
-                        if (finalUsername && now - finalTime < 15000) { // 15秒容错
+                        if (finalUsername && now - finalTime < 4000) { // 15秒容错
                             // 保存到正式存储
                             $prefs.setValueForKey(finalUsername, 'hsytoken_current');
                             
