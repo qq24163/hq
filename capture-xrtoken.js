@@ -5,59 +5,40 @@
 hostname = jiuyixiaoer.fzjingzhou.com
 
 [rewrite_local]
-^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/Index\/index url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-xrtoken.js
+^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-xrtoken.js
 */
-// capture-xrtoken.js - 捕获XRTOKEN，多账号用@分隔
-const method = $request.method;
-let tokenValue = null;
+// capture-xrtoken-response-simple.js - 极简版本
+const url = $request.url;
 
-if (method === 'POST' && $request.body) {
+if (url.includes('jiuyixiaoer.fzjingzhou.com/api/login/getWxMiniProgramSessionKey') && $response.body) {
     try {
-        // 解析URL编码的表单数据
-        const params = new URLSearchParams($request.body);
-        tokenValue = params.get('token');
+        const body = JSON.parse($response.body);
+        let token = body.token || (body.data && body.data.token) || body.access_token || body.session_key;
         
-        if (!tokenValue) {
-            // 尝试其他可能的参数名
-            tokenValue = params.get('access_token') || params.get('auth_token');
+        if (token) {
+            // 保存当前token
+            $prefs.setValueForKey(token, 'xrtoken_current');
+            
+            // 多账号管理
+            let allTokens = ($prefs.valueForKey('XRTOKEN') || '').split('#').filter(t => t);
+            if (!allTokens.includes(token)) {
+                if (allTokens.length >= 10) allTokens.shift();
+                allTokens.push(token);
+                $prefs.setValueForKey(allTokens.join('#'), 'XRTOKEN');
+            }
+            
+            // 单条通知
+            $notify(
+                '📱 XRTOKEN',
+                `账号${allTokens.length}个`,
+                token.substring(0, 20) + '...'
+            );
+            
+            $tool.copy(token);
         }
     } catch (e) {
-        console.log(`[ERROR] 解析失败: ${e}`);
+        console.log('[XRTOKEN Response Error] ' + e);
     }
-}
-
-if (tokenValue) {
-    // 存储到BoxJS
-    $prefs.setValueForKey(tokenValue, 'xrtoken_current');
-    
-    // 多账号管理（用@分隔）
-    let allTokensStr = $prefs.valueForKey('XRTOKEN') || '';
-    let allTokens = allTokensStr ? allTokensStr.split('@') : [];
-    
-    // 检查是否新token
-    const isNewToken = !allTokens.includes(tokenValue);
-    
-    if (isNewToken) {
-        // 新token，添加到数组
-        if (allTokens.length >= 10) allTokens.shift(); // 限制10个账号
-        allTokens.push(tokenValue);
-        
-        // 保存用@分隔的字符串
-        $prefs.setValueForKey(allTokens.join('@'), 'XRTOKEN');
-    }
-    
-    // 单条精简通知
-    $notify(
-        isNewToken ? "✅ 新XRTOKEN" : "🔄 XRTOKEN",
-        `Token: ${tokenValue.substring(0, 15)}...`,
-        `账号数: ${allTokens.length}`
-    );
-    
-    // 自动复制当前token
-    $tool.copy(tokenValue);
-    
-} else {
-    console.log(`[DEBUG] 未找到token\n请求体: ${$request.body}`);
 }
 
 $done({});
