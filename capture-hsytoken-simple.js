@@ -7,7 +7,7 @@ hostname = www.52bjy.com
 [rewrite_local]
 ^https:\/\/www\.52bjy\.com\/api\/avatar\/show\.php.*username= url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-hsytoken-simple.js
 */
-// capture-hsytoken-account-30s-simple.js - 极简账号30秒窗口版本
+// capture-hsytoken-account-30s-simple-fixed.js - 极简版本，30秒内只保存第一次
 const url = $request.url;
 
 if (url.includes('www.52bjy.com/api/avatar/show.php')) {
@@ -32,9 +32,9 @@ if (url.includes('www.52bjy.com/api/avatar/show.php')) {
                 $prefs.setValueForKey(JSON.stringify(lastSaves), 'hsytoken_last_saves');
                 
             } else {
-                // 在30秒内，跳过保存
+                // 在30秒内，完全跳过保存（不更新记录）
                 const remaining = windowTime - (now - lastSaves[username]);
-                console.log(`[HSYTOKEN] 账号 ${username} 在30秒窗口内，${Math.ceil(remaining/1000)}秒后可保存`);
+                console.log(`[HSYTOKEN] 账号 ${username} 在30秒窗口内，跳过保存（${Math.ceil(remaining/1000)}秒后结束）`);
             }
         }
     } catch (e) {
