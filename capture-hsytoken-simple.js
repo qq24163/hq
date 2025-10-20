@@ -22,7 +22,7 @@ if (url.includes('www.52bjy.com/api/avatar/show.php')) {
             const timers = JSON.parse(timersStr);
             
             // 5秒时间窗口检查
-            if (timers[username] && (now - timers[username] < 5000)) {
+            if (timers[username] && (now - timers[username] < 30000)) {
                 console.log(`[HSYTOKEN] ${username} 5秒限制，跳过`);
                 $done({});
                 return;
