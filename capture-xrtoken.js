@@ -5,7 +5,7 @@
 hostname = jiuyixiaoer.fzjingzhou.com
 
 [rewrite_local]
-^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/Person\/sign url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-xrtoken.js
+^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/Index\/index url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/capture-xrtoken.js
 */
 // capture-xrtoken.js - 捕获XRTOKEN，多账号用@分隔
 const method = $request.method;
