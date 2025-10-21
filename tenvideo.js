@@ -34,9 +34,9 @@ isLottery: 值域[true, false] 默认为false表示不抽奖，抽抽乐于2024�
 hostname = vip.video.qq.com, pbaccess.video.qq.com
 
 [rewrite_local]
-https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReadTaskList? url script-request-header https://raw.githubusercontent.com/WowYiJiu/Personal/main/Script/tenvideo.js
-https://pbaccess.video.qq.com/trpc.videosearch.hot_rank.HotRankServantHttp/HotRankHttp url script-request-header https://raw.githubusercontent.com/WowYiJiu/Personal/main/Script/tenvideo.js
-https://pbaccess.video.qq.com/trpc.video_account_login.web_login_trpc.WebLoginTrpc/NewRefresh url script-request-body https://raw.githubusercontent.com/WowYiJiu/Personal/main/Script/tenvideo.js
+https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReadTaskList? url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/tenvideo.js
+https://pbaccess.video.qq.com/trpc.videosearch.hot_rank.HotRankServantHttp/HotRankHttp url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/tenvideo.js
+https://pbaccess.video.qq.com/trpc.video_account_login.web_login_trpc.WebLoginTrpc/NewRefresh url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/tenvideo.js
 
 [rewrite_remote]
 https://raw.githubusercontent.com/WowYiJiu/Personal/main/rewrite/get_tenvideo_cookie.conf, tag=腾讯视频, update-interval=172800, opt-parser=false, enabled=false
