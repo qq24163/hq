@@ -7,7 +7,7 @@ hostname = lmf.lvmifo.com
 [rewrite_local]
 ^https:\/\/lmf\.lvmifo\.com\/api\/5dca57afa379e.*m=getIntegralLog url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/lmftoken.js
 */
-// capture-lmftoken-simple.js - 极简版本
+// capture-lmftoken-new-simple.js - 极简版本
 const url = $request.url;
 
 if (url.includes('lmf.lvmifo.com/api/5dca57afa379e') && url.includes('m=getIntegralLog')) {
