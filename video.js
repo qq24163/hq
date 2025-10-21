@@ -15,9 +15,9 @@ const $ = new Env("腾讯视频");
 
 let txspCookie = ($.isNode() ? process.env.txspCookie : $.getdata('txspCookie')) || "";
 let isSkipTxspCheckIn = $.isNode() ? process.env.isSkipTxspCheckIn : (($.getdata('isSkipTxspCheckIn') !== undefined && $.getdata('isSkipTxspCheckIn') !== '') ? JSON.parse($.getdata('isSkipTxspCheckIn')) : false);
-let dayOfGetMonthTicket = ($.isNode() ? process.env.dayOfGetMonthTicket : $.getdata('dayOfGetMonthTicket')) || 28;
-let dayOfGetMonthTicket1 = ($.isNode() ? process.env.dayOfGetMonthTicket1 : $.getdata('dayOfGetMonthTicket1')) || 18;
-let dayOfGetMonthTicket2 = ($.isNode() ? process.env.dayOfGetMonthTicket2 : $.getdata('dayOfGetMonthTicket2')) || 8;
+let dayOfGetMonthTicket = ($.isNode() ? process.env.dayOfGetMonthTicket : $.getdata('dayOfGetMonthTicket')) || 21;
+let dayOfGetMonthTicket1 = ($.isNode() ? process.env.dayOfGetMonthTicket1 : $.getdata('dayOfGetMonthTicket1')) || 21;
+let dayOfGetMonthTicket2 = ($.isNode() ? process.env.dayOfGetMonthTicket2 : $.getdata('dayOfGetMonthTicket2')) || 21;
 let module_id = ($.isNode() ? process.env.module_id : $.getdata('module_id')) || "p2e26y18i0j2i45eg5fph4fqr5";
 let module_id1 = ($.isNode() ? process.env.module_id1 : $.getdata('module_id1')) || "d19z5otu8rqyc68z06p4ok5165";
 let module_id2 = ($.isNode() ? process.env.module_id2 : $.getdata('module_id2')) || "xhx9iz36qw48e6ppjho5sk5pql";
