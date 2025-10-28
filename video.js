@@ -100,18 +100,18 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 				}
 			}
 			$.info(`--------- 结束 ---------\n`);
-            /*$.info(`---- 开始 领取28日keep会员月卡 ----`);
+            $.info(`---- 开始 领取28日keep会员月卡 ----`);
 			await getDayTicket3();
 			await waitRandom(1000, 2000);
 			$.info(`--------- 结束 ---------\n`);
-            $.info(`---- 开始 领取18日keep会员月卡 ----`);
+            /*$.info(`---- 开始 领取18日keep会员月卡 ----`);
 			//await getDayTicket1();
 			await waitRandom(1000, 2000);
 			$.info(`--------- 结束 ---------\n`);
             $.info(`---- 开始 领取8日keep会员月卡 ----`);
 			//await getDayTicket2();
 			await waitRandom(1000, 2000);
-			$.info(`--------- 结束 ---------\n`);*/
+			$.info(`--------- 结束 ---------\n`);
 			$.info(`---- 开始 领取28日keep会员月卡 ----`);
 			var today = new Date();
 			var date = today.getDate();
@@ -150,7 +150,7 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 				$.info(`今天是${date}号`);
 				await getDayTicket2();
 			}
-            $.info(`--------- 结束 ---------\n`);
+            $.info(`--------- 结束 ---------\n`);*/
 		}
 		await SendMsg();
 	})()
