@@ -3,7 +3,7 @@
 *@desp       本脚本仅适用于腾讯视频会员每日签到，仅测试Quantumult X、青龙（只支持单账号）
 *@env        txspCookie、isSkipTxspCheckIn
 *@updated    2024-7-18
-*@version    v1.0.3
+*@version    v1.0.4
 
 🌟 环境变量说明
 txspCookie：腾讯视频app的Cookie
@@ -15,12 +15,6 @@ const $ = new Env("腾讯视频");
 
 let txspCookie = ($.isNode() ? process.env.txspCookie : $.getdata('txspCookie')) || "";
 let isSkipTxspCheckIn = $.isNode() ? process.env.isSkipTxspCheckIn : (($.getdata('isSkipTxspCheckIn') !== undefined && $.getdata('isSkipTxspCheckIn') !== '') ? JSON.parse($.getdata('isSkipTxspCheckIn')) : false);
-let dayOfGetMonthTicket = ($.isNode() ? process.env.dayOfGetMonthTicket : $.getdata('dayOfGetMonthTicket')) || 28;
-let dayOfGetMonthTicket1 = ($.isNode() ? process.env.dayOfGetMonthTicket1 : $.getdata('dayOfGetMonthTicket1')) || 18;
-let dayOfGetMonthTicket2 = ($.isNode() ? process.env.dayOfGetMonthTicket2 : $.getdata('dayOfGetMonthTicket2')) || 8;
-let module_id = ($.isNode() ? process.env.module_id : $.getdata('module_id')) || "p2e26y18i0j2i45eg5fph4fqr5";
-let module_id1 = ($.isNode() ? process.env.module_id1 : $.getdata('module_id1')) || "d19z5otu8rqyc68z06p4ok5165";
-let module_id2 = ($.isNode() ? process.env.module_id2 : $.getdata('module_id2')) || "xhx9iz36qw48e6ppjho5sk5pql";
 
 const Notify = 1;
 const notify = $.isNode() ? require("./sendNotify") : "";
@@ -83,7 +77,6 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 				await readTxspTaskList();
 				await waitRandom(1000, 2000);
 				
-				// 执行签到任务
 				if (!isTxspCheckIn && month_received_score !== month_limit) {
 					await txspCheckIn();
 					await waitRandom(1000, 2000);
@@ -93,64 +86,20 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 					$.info(`本月活跃任务已满${month_limit}V力值，下个月再来哦`);
 				}
 				
-				// 执行手机看视频任务
 				if (watchVideoTask && watchVideoTask.task_status === 0) {
 					await completeWatchVideoTask();
 					await waitRandom(1000, 2000);
 				}
 			}
 			$.info(`--------- 结束 ---------\n`);
-            $.info(`---- 开始 领取28日keep会员月卡 ----`);
-			await getDayTicket3();
-			await waitRandom(1000, 2000);
+
+			// 使用完整版Keep月卡兑换
+			await completeKeepExchange();
+			// 可选：测试所有模块（调试用）
+			//await testAllKeepModules();
+
+			
 			$.info(`--------- 结束 ---------\n`);
-            /*$.info(`---- 开始 领取18日keep会员月卡 ----`);
-			//await getDayTicket1();
-			await waitRandom(1000, 2000);
-			$.info(`--------- 结束 ---------\n`);
-            $.info(`---- 开始 领取8日keep会员月卡 ----`);
-			//await getDayTicket2();
-			await waitRandom(1000, 2000);
-			$.info(`--------- 结束 ---------\n`);
-			$.info(`---- 开始 领取28日keep会员月卡 ----`);
-			var today = new Date();
-			var date = today.getDate();
-			if (date !== dayOfGetMonthTicket){
-				$.info(`目标日期：${dayOfGetMonthTicket}号`);
-				$.info(`今天是${date}号`);
-				$.info(`跳过`);
-			} else {
-				$.info(`目标日期：${dayOfGetMonthTicket}号`);
-				$.info(`今天是${date}号`);
-				await getDayTicket();
-			}
-            $.info(`--------- 结束 ---------\n`);
-			$.info(`---- 开始 领取18日keep会员月卡 ----`);
-			var today = new Date();
-			var date = today.getDate();
-			if (date !== dayOfGetMonthTicket1){
-				$.info(`目标日期：${dayOfGetMonthTicket1}号`);
-				$.info(`今天是${date}号`);
-				$.info(`跳过`);
-			} else {
-				$.info(`目标日期：${dayOfGetMonthTicket1}号`);
-				$.info(`今天是${date}号`);
-				await getDayTicket1();
-			}
-            $.info(`--------- 结束 ---------\n`);
-			$.info(`---- 开始 领取8日keep会员月卡 ----`);
-			var today = new Date();
-			var date = today.getDate();
-			if (date !== dayOfGetMonthTicket2){
-				$.info(`目标日期：${dayOfGetMonthTicket2}号`);
-				$.info(`今天是${date}号`);
-				$.info(`跳过`);
-			} else {
-				$.info(`目标日期：${dayOfGetMonthTicket2}号`);
-				$.info(`今天是${date}号`);
-				await getDayTicket2();
-			}
-            $.info(`--------- 结束 ---------\n`);*/
 		}
 		await SendMsg();
 	})()
@@ -159,178 +108,329 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 }
 
 /**
- * 领取测试
+ * 完整版Keep月卡兑换脚本（包含完整错误处理）
  * @async
- * @function getDayTicket
+ * @function completeKeepExchange
  * @returns
  */
-async function getDayTicket3() {
-	return new Promise((resolve, reject) => {
-		let timestamp = Date.now();
-		$.info(`   ⏰ 时间戳: ${timestamp}`);
-		// 使用你抓包成功的URL格式
-		let url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?platform=8002&module_id=p77xaoxh965pic3d2goyhs5cpu&act_id=9y6scr7xd58aq9zsk7oe5gdf8a&type=100250&option=100&otype=xjson&_ts=${timestamp}`;
-		let opt = {
-			url: url,
-			headers: {
-				Origin: "https://film.video.qq.com",
-				Referer: "https://film.video.qq.com/x/magic-act/9y6scr7xd58aq9zsk7oe5gdf8a/10200",
-				Cookie: txspCookie,
-			},
-		};
-		$.get(opt, async (error, resp, data) => {
-			try {
-				var obj = JSON.parse(data);
-				var code = obj.ret;
-				if (code === 0) {
-					$.info(`领取28日keep会员月卡成功`);
-					$.taskInfo += `领取keep会员月卡成功成功\n`;
-				} else if (code === -1014) {
-					$.info(`物品已领完, 下次再来吧`);
-					$.taskInfo += `物品已领完, 下次再来吧\n`;
-				} else {
-					$.warn(`领取keep会员月卡成功失败，异常详细信息如下\n${data}`);
-					$.taskInfo += `领取keep会员月卡成功失败，异常详细信息请查看日志\n`;
-				}
-			} catch (e) {
-				$.error(e);
-			} finally {
-				resolve();
-			}
-		});
-	});
+async function completeKeepExchange() {
+    $.info(`🎯 开始Keep月卡兑换流程`);
+    
+    // 步骤1: 检查VIP状态
+    if (!isTxspVip) {
+        $.warn(`❌ 非VIP用户，无法参与活动`);
+        return;
+    }
+    
+    // 步骤2: 根据日期确定目标模块
+    const targetModule = getTodayModule();
+    if (!targetModule) {
+        $.info(`📅 今天不是特殊日期(8/18/28)，跳过Keep月卡领取`);
+        return;
+    }
+    
+    $.info(`🎁 目标: ${targetModule.name}`);
+    $.info(`🔧 模块ID: ${targetModule.id}`);
+    
+    // 步骤3: 尝试领取Keep月卡
+    const result = await receiveKeepPrizeAdvanced(targetModule.id, targetModule.name);
+    
+    // 步骤4: 显示最终结果
+    if (result.success) {
+        $.info(`🎉 恭喜！Keep月卡领取成功！`);
+        $.info(`🔑 兑换码: ${result.cdkey}`);
+        $.info(`🌐 兑换地址: ${result.url}`);
+        $.info(`💡 请复制兑换码到Keep App中兑换使用`);
+        
+        $.taskInfo += `Keep月卡领取成功！兑换码: ${result.cdkey}\n`;
+    } else {
+        $.warn(`😞 领取失败: ${result.error}`);
+        $.taskInfo += `Keep月卡领取失败: ${result.error}\n`;
+    }
 }
 
 /**
- * 领取28
+ * 高级版Keep奖品领取（包含完整错误处理）
  * @async
- * @function getDayTicket
- * @returns
+ * @function receiveKeepPrizeAdvanced
+ * @param {string} moduleId 
+ * @param {string} moduleName 
+ * @returns {Promise<Object>}
  */
-async function getDayTicket() {
-	return new Promise((resolve, reject) => {
-		let timestamp = Date.now();
-		$.info(`   ⏰ 时间戳: ${timestamp}`);
-		// 使用你抓包成功的URL格式
-		let url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?type=100251&option=101&act_id=9y6scr7xd58aq9zsk7oe5gdf8a&module_id=${module_id}&is_prepublish=0&platform=7&otype=xjson&_ts=${timestamp}`;
-		let opt = {
-			url: url,
-			headers: {
-				Origin: "https://film.video.qq.com",
-				Referer: "https://film.video.qq.com/x/magic-act/9y6scr7xd58aq9zsk7oe5gdf8a/10200",
-				Cookie: txspCookie,
-			},
-		};
-		$.get(opt, async (error, resp, data) => {
-			try {
-				var obj = JSON.parse(data);
-				var code = obj.ret;
-				if (code === 0) {
-					$.info(`领取28日keep会员月卡成功`);
-					$.taskInfo += `领取keep会员月卡成功成功\n`;
-				} else if (code === -1014) {
-					$.info(`物品已领完, 下次再来吧`);
-					$.taskInfo += `物品已领完, 下次再来吧\n`;
-				} else {
-					$.warn(`领取keep会员月卡成功失败，异常详细信息如下\n${data}`);
-					$.taskInfo += `领取keep会员月卡成功失败，异常详细信息请查看日志\n`;
-				}
-			} catch (e) {
-				$.error(e);
-			} finally {
-				resolve();
-			}
-		});
-	});
+async function receiveKeepPrizeAdvanced(moduleId, moduleName) {
+    return new Promise((resolve) => {
+        let timestamp = Date.now();
+        let url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?platform=7&type=100251&option=100&act_id=9y6scr7xd58aq9zsk7oe5gdf8a&module_id=${moduleId}&ptag=channel.rightmodule&is_prepublish=&aid=V0$$2:7$8:2003$3:9.02.20$34:1&otype=xjson&_ts=${timestamp}`;
+        
+        let opt = {
+            url: url,
+            headers: {
+                Origin: "https://film.video.qq.com",
+                Referer: "https://film.video.qq.com/x/magic-act/9y6scr7xd58aq9zsk7oe5gdf8a/10200",
+                Cookie: txspCookie,
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+                'Accept': 'application/json'
+            },
+            timeout: 15000
+        };
+        
+        $.get(opt, async (error, resp, data) => {
+            try {
+                // 网络错误处理
+                if (error) {
+                    let errorResult = {
+                        success: false,
+                        error: `网络错误: ${error}`,
+                        errorCode: -9999
+                    };
+                    resolve(errorResult);
+                    return;
+                }
+                
+                // 空数据检查
+                if (!data) {
+                    let errorResult = {
+                        success: false,
+                        error: "服务器返回空数据",
+                        errorCode: -9998
+                    };
+                    resolve(errorResult);
+                    return;
+                }
+                
+                var obj = JSON.parse(data);
+                
+                // 成功情况
+                if (obj.ret === 0 && obj.receive_result === 1 && obj.receive_list && obj.receive_list.length > 0) {
+                    let receiveItem = obj.receive_list[0];
+                    let cdkey = receiveItem.ext_params?.cdkey_res || receiveItem.cdkey;
+                    
+                    let successResult = {
+                        success: true,
+                        cdkey: cdkey,
+                        url: receiveItem.receive_url_h5,
+                        propertyId: receiveItem.receive_propertyId,
+                        name: receiveItem.receive_name,
+                        errorCode: 0
+                    };
+                    resolve(successResult);
+                    
+                } else {
+                    // 根据错误码提供详细错误信息
+                    let errorInfo = getDetailedErrorInfo(obj.ret);
+                    let errorResult = {
+                        success: false,
+                        error: errorInfo.message,
+                        errorCode: obj.ret,
+                        suggestion: errorInfo.suggestion
+                    };
+                    resolve(errorResult);
+                }
+                
+            } catch (e) {
+                // JSON解析错误
+                let errorResult = {
+                    success: false,
+                    error: `数据解析失败: ${e.message}`,
+                    errorCode: -9997
+                };
+                resolve(errorResult);
+            }
+        });
+    });
 }
+
 /**
- * 领取18
- * @async
- * @function getDayTicket
- * @returns
+ * 获取详细的错误信息（基于您提供的错误码列表）
+ * @function getDetailedErrorInfo
+ * @param {number} errorCode 
+ * @returns {Object}
  */
-async function getDayTicket1() {
-	return new Promise((resolve, reject) => {
-		let timestamp = Date.now();
-		$.info(`   ⏰ 时间戳: ${timestamp}`);
-		// 使用你抓包成功的URL格式
-		let url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?type=100251&option=101&act_id=9y6scr7xd58aq9zsk7oe5gdf8a&module_id=${module_id1}&is_prepublish=0&platform=7&otype=xjson&_ts=${timestamp}`;
-		let opt = {
-			url: url,
-			headers: {
-				Origin: "https://film.video.qq.com",
-				Referer: "https://film.video.qq.com/x/magic-act/9y6scr7xd58aq9zsk7oe5gdf8a/10200",
-				Cookie: txspCookie,
-			},
-		};
-		$.get(opt, async (error, resp, data) => {
-			try {
-				var obj = JSON.parse(data);
-				var code = obj.ret;
-				if (code === 0) {
-					$.info(`领取18日keep会员月卡成功`);
-					$.taskInfo += `领取keep会员月卡成功成功\n`;
-				} else if (code === -1014) {
-					$.info(`物品已领完, 下次再来吧`);
-					$.taskInfo += `物品已领完, 下次再来吧\n`;
-				} else {
-					$.warn(`领取keep会员月卡成功失败，异常详细信息如下\n${data}`);
-					$.taskInfo += `领取keep会员月卡成功失败，异常详细信息请查看日志\n`;
-				}
-			} catch (e) {
-				$.error(e);
-			} finally {
-				resolve();
-			}
-		});
-	});
+function getDetailedErrorInfo(errorCode) {
+    const errorMap = {
+        '0': { 
+            message: '成功', 
+            suggestion: '领取成功' 
+        },
+        '-904': { 
+            message: '您还没有抽奖资格，谢谢参与。', 
+            suggestion: '请检查是否是VIP用户或活动参与条件' 
+        },
+        '-906': { 
+            message: '免费试用领取成功', 
+            suggestion: '已成功领取试用版' 
+        },
+        '-1002': { 
+            message: '请重新登录', 
+            suggestion: 'Cookie可能失效，请重新获取' 
+        },
+        '-901': { 
+            message: '活动还没开始', 
+            suggestion: '请等活动开始时间' 
+        },
+        '-900': { 
+            message: '活动已结束', 
+            suggestion: '活动已结束，请关注下次活动' 
+        },
+        '-1012': { 
+            message: '限QQ用户参加', 
+            suggestion: '该活动仅限QQ用户参与' 
+        },
+        '-1010': { 
+            message: '系统繁忙，请稍候重试', 
+            suggestion: '请稍后重试' 
+        },
+        '-903': { 
+            message: '您的抽奖资格已用完，谢谢参与。', 
+            suggestion: '本月资格已用完，下月再来' 
+        },
+        '-100': { 
+            message: '很抱歉，没有中奖，谢谢参与！', 
+            suggestion: '本次未中奖，下次再试' 
+        },
+        '-102': { 
+            message: '未登录', 
+            suggestion: '请检查Cookie是否有效' 
+        },
+        '-1014': { 
+            message: '来晚了一步，已经没有奖品了', 
+            suggestion: '奖品已被领完，下次请早' 
+        },
+        '-1013': { 
+            message: '秒杀还没开始', 
+            suggestion: '请等待秒杀开始时间' 
+        },
+        '-1019': { 
+            message: '用户访问过多，请稍候重试', 
+            suggestion: '访问过于频繁，请稍后重试' 
+        },
+        '-905': { 
+            message: '未通过安全策略校验', 
+            suggestion: '可能触发风控，请稍后重试' 
+        },
+        '-907': { 
+            message: '开通无资格抽中奖', 
+            suggestion: '不符合参与资格' 
+        },
+        '-100104': { 
+            message: '单设备开通数量到达上限', 
+            suggestion: '设备参与次数已达上限' 
+        },
+        '-1052': { 
+            message: '已开通无资格', 
+            suggestion: '已开通服务，无重复参与资格' 
+        },
+        '-910': { 
+            message: '奖品已全部领完', 
+            suggestion: '所有奖品已被领完' 
+        },
+        '-911': { 
+            message: '当月奖品已领完', 
+            suggestion: '本月奖品已领完，下月再来' 
+        },
+        '-912': { 
+            message: '当周奖品已领完', 
+            suggestion: '本周奖品已领完，下周再来' 
+        },
+        '-913': { 
+            message: '当日奖品已领完', 
+            suggestion: '今日奖品已领完，明天再来' 
+        },
+        '-914': { 
+            message: '奖品已领取', 
+            suggestion: '您已经领取过该奖品' 
+        },
+        '-915': { 
+            message: '当月奖品已领取', 
+            suggestion: '本月已领取过该奖品' 
+        },
+        '-916': { 
+            message: '当周奖品已领取', 
+            suggestion: '本周已领取过该奖品' 
+        },
+        '-917': { 
+            message: '当日奖品已领取', 
+            suggestion: '今日已领取过该奖品' 
+        },
+        '-2021': { 
+            message: '已领取过该奖品', 
+            suggestion: '不能重复领取' 
+        },
+        '-100015': { 
+            message: '权限不足', 
+            suggestion: '请检查VIP状态和Cookie' 
+        },
+        '-888888': { 
+            message: '系统繁忙，请稍候重试', 
+            suggestion: '系统临时故障，请稍后重试' 
+        }
+    };
+    
+    return errorMap[errorCode.toString()] || { 
+        message: `未知错误 (${errorCode})`, 
+        suggestion: '请查看日志获取详细信息' 
+    };
 }
+
 /**
- * 领取8
+ * 检查当前日期对应的模块
+ * @function getTodayModule
+ * @returns {Object|null}
+ */
+function getTodayModule() {
+    var today = new Date();
+    var date = today.getDate();
+    
+    const dateModules = {
+        28: { id: "p2e26y18i0j2i45eg5fph4fqr5", name: "28日Keep月卡" },
+        18: { id: "d19z5otu8rqyc68z06p4ok5165", name: "18日Keep月卡" },
+        8: { id: "xhx9iz36qw48e6ppjho5sk5pql", name: "8日Keep月卡" }
+    };
+    
+    return dateModules[date] || null;
+}
+
+/**
+ * 批量测试所有模块（用于调试）
  * @async
- * @function getDayTicket
+ * @function testAllKeepModules
  * @returns
  */
-async function getDayTicket2() {
-	return new Promise((resolve, reject) => {
-		let timestamp = Date.now();
-		$.info(`   ⏰ 时间戳: ${timestamp}`);
-		// 使用你抓包成功的URL格式
-		let url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?type=100251&option=101&act_id=9y6scr7xd58aq9zsk7oe5gdf8a&module_id=${module_id2}&is_prepublish=0&platform=7&otype=xjson&_ts=${timestamp}`;
-		let opt = {
-			url: url,
-			headers: {
-				Origin: "https://film.video.qq.com",
-				Referer: "https://film.video.qq.com/x/magic-act/9y6scr7xd58aq9zsk7oe5gdf8a/10200",
-				Cookie: txspCookie,
-			},
-		};
-		$.get(opt, async (error, resp, data) => {
-			try {
-				var obj = JSON.parse(data);
-				var code = obj.ret;
-				if (code === 0) {
-					$.info(`领取8日keep会员月卡成功`);
-					$.taskInfo += `领取keep会员月卡成功成功\n`;
-				} else if (code === -1014) {
-					$.info(`物品已领完, 下次再来吧`);
-					$.taskInfo += `物品已领完, 下次再来吧\n`;
-				} else {
-					$.warn(`领取keep会员月卡成功失败，异常详细信息如下\n${data}`);
-					$.taskInfo += `领取keep会员月卡成功失败，异常详细信息请查看日志\n`;
-				}
-			} catch (e) {
-				$.error(e);
-			} finally {
-				resolve();
-			}
-		});
-	});
+async function testAllKeepModules() {
+    $.info(`🧪 测试所有Keep月卡模块`);
+    
+    const allModules = [
+        { id: "p2e26y18i0j2i45eg5fph4fqr5", name: "28日Keep月卡" },
+        { id: "d19z5otu8rqyc68z06p4ok5165", name: "18日Keep月卡" },
+        { id: "xhx9iz36qw48e6ppjho5sk5pql", name: "8日Keep月卡" }
+    ];
+    
+    let results = [];
+    
+    for (let module of allModules) {
+        $.info(`测试: ${module.name}`);
+        let result = await receiveKeepPrizeAdvanced(module.id, module.name);
+        results.push({
+            module: module.name,
+            ...result
+        });
+        await waitRandom(3000, 5000);
+    }
+    
+    // 显示测试结果
+    $.info(`📊 测试结果汇总:`);
+    for (let result of results) {
+        if (result.success) {
+            $.info(`✅ ${result.module}: 成功 - 兑换码: ${result.cdkey}`);
+        } else {
+            $.info(`❌ ${result.module}: 失败 - ${result.error}`);
+        }
+    }
 }
 
 
 async function getVipInfo() {
-	return new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
 			let opt = {
 				url: `https://vip.video.qq.com/rpc/trpc.query_vipinfo.vipinfo.QueryVipInfo/GetVipUserInfoH5`,
 				headers: {
@@ -388,8 +488,11 @@ async function readTxspTaskList() {
 			headers: {
 				'Cookie': txspCookie,
 				'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-				'Referer': 'https://film.video.qq.com/x/grade/?ovscroll=0&hidetitlebar=1&ptag=channel.rightmodule&jump_task=1&aid=V0',
-				'Origin': 'https://film.video.qq.com'
+				'Referer': 'https://film.video.qq.com/x/grade/',
+				'Origin': 'https://film.video.qq.com',
+				'Accept': 'application/json',
+				'Accept-Language': 'zh-CN,zh;q=0.9',
+				'X-Requested-With': 'XMLHttpRequest'
 			},
 		};
 		$.get(opt, async (error, resp, data) => {
@@ -404,7 +507,6 @@ async function readTxspTaskList() {
 					var obj = JSON.parse(data);
 					
 					if (obj.ret === 0) {
-						// 获取限制信息
 						month_received_score = obj.limit_info?.month_received_score || "0";
 						month_limit = obj.limit_info?.month_limit || "0";
 						
@@ -412,7 +514,6 @@ async function readTxspTaskList() {
 						$.info(`获取到${taskList.length}个任务`);
 						
 						if (taskList && taskList.length > 0) {
-							// 查找签到任务
 							let txspCheckInTask = taskList.find(task => 
 								task.task_id === 101 || 
 								task.task_maintitle === "VIP会员每日签到"
@@ -428,7 +529,6 @@ async function readTxspTaskList() {
 								isTxspCheckIn = false;
 							}
 							
-							// 查找手机看视频任务
 							watchVideoTask = taskList.find(task => 
 								task.task_id === 215 || 
 								task.task_maintitle === "手机看视频" ||
@@ -475,8 +575,11 @@ async function txspCheckIn() {
 			headers: {
 				'Cookie': txspCookie,
 				'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-				'Referer': 'https://film.video.qq.com/x/grade/?ovscroll=0&hidetitlebar=1&ptag=channel.rightmodule&jump_task=1&aid=V0',
-				'Origin': 'https://film.video.qq.com'
+				'Referer': 'https://film.video.qq.com/x/grade/',
+				'Origin': 'https://film.video.qq.com',
+				'Accept': 'application/json',
+				'Accept-Language': 'zh-CN,zh;q=0.9',
+				'X-Requested-With': 'XMLHttpRequest'
 			},
 		};
 		$.get(opt, async (error, resp, data) => {
@@ -523,7 +626,6 @@ async function txspCheckIn() {
 
 async function completeWatchVideoTask() {
 	return new Promise((resolve, reject) => {
-		// 手机看视频任务的完成接口
 		let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/CompleteTask?rpc_data=%7B%22task_id%22:215%7D`;
 		
 		let opt = {
@@ -531,8 +633,11 @@ async function completeWatchVideoTask() {
 			headers: {
 				'Cookie': txspCookie,
 				'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-				'Referer': 'https://film.video.qq.com/x/grade/?ovscroll=0&hidetitlebar=1&ptag=channel.rightmodule&jump_task=1&aid=V0',
-				'Origin': 'https://film.video.qq.com'
+				'Referer': 'https://film.video.qq.com/x/grade/',
+				'Origin': 'https://film.video.qq.com',
+				'Accept': 'application/json',
+				'Accept-Language': 'zh-CN,zh;q=0.9',
+				'X-Requested-With': 'XMLHttpRequest'
 			},
 		};
 		$.get(opt, async (error, resp, data) => {
