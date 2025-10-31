@@ -7,16 +7,39 @@
 
 🌟 环境变量说明
 txspCookie：腾讯视频app的Cookie
+txspRefreshCookie、txspRefreshBody：腾讯视频网页NewRefresh接口中的数据，用来刷新Cookie中的vqq_vusession
 isSkipTxspCheckIn：值域[true, false] 默认为false表示正常进行腾讯视频会员签到，用于特殊情况下（账号需要获取短信验证码或者需要过滑块验证码）时开启
 ❗ 本脚本只能给腾讯视频正常账号签到，如有验证请设置isSkipTxspCheckIn为true，直到手动签到无验证为止
+
+📌 获取Cookie：（重写需要获取3个值：txspCookie、txspRefreshCookie、txspRefreshBody)
+- 进入腾讯视频app，点击右下角我的，点击头像下的视频VIP进入会员中心看到系统消息提示获取txspCookie成功即可
+- 浏览器进入腾讯视频网页版，登录后切换成桌面版，刷新网页看到系统消息提示获取txspRefreshCookie、txspRefreshBody成功即可
+- 获取Cookie后, 请将Cookie脚本禁用并移除主机名，以免产生不必要的MITM
+
+⚙ 配置 (Quantumult X)
+[MITM]
+hostname = vip.video.qq.com, pbaccess.video.qq.com
+
+[rewrite_local]
+https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReadTaskList? url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/video.js
+https://pbaccess.video.qq.com/trpc.videosearch.hot_rank.HotRankServantHttp/HotRankHttp url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/video.js
+https://pbaccess.video.qq.com/trpc.video_account_login.web_login_trpc.WebLoginTrpc/NewRefresh url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/video.js
+
+[rewrite_remote]
+https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/get_tenvideo_cookie.conf, tag=腾讯视频, update-interval=172800, opt-parser=false, enabled=false
+
+[task_local]
+5 7 * * * https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/video.js, tag=腾讯视频, img-url=https://github.com/WowYiJiu/Personal/blob/main/icon/Color/tenvideo.png?raw=true, enabled=true
 */
 
 const $ = new Env("腾讯视频");
 
 let txspCookie = ($.isNode() ? process.env.txspCookie : $.getdata('txspCookie')) || "";
+let txspRefreshCookie = ($.isNode() ? process.env.txspRefreshCookie : $.getdata('txspRefreshCookie')) || "";
+let txspRefreshBody = ($.isNode() ? process.env.txspRefreshBody  : $.getdata('txspRefreshBody')) || "";
 let isSkipTxspCheckIn = $.isNode() ? process.env.isSkipTxspCheckIn : (($.getdata('isSkipTxspCheckIn') !== undefined && $.getdata('isSkipTxspCheckIn') !== '') ? JSON.parse($.getdata('isSkipTxspCheckIn')) : false);
 
-const Notify = 1;
+const Notify = 1; //0为关闭通知,1为打开通知,默认为1
 const notify = $.isNode() ? require("./sendNotify") : "";
 
 let isTxspVip = false, isTxspSvip = false;
@@ -47,7 +70,10 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 			$.warn(`未填写txspCookie环境变量`);
 			return;
 		}
-		
+		$.info("---- 开始 刷新vusession ----");
+		await refresh_vusession();
+		$.info(`--------- 结束 ---------\n`);
+		$.info(`用户昵称：${nickname}`);
 		await getVipInfo();
 		if (isTxspVip){
 			$.info(`---- 腾讯视频VIP信息 ----`);
@@ -94,9 +120,9 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 			$.info(`--------- 结束 ---------\n`);
 
 			// 使用完整版Keep月卡兑换
-			await completeKeepExchange();
+			//await completeKeepExchange();
 			// 可选：测试所有模块（调试用）
-			//await testAllKeepModules();
+			await testAllKeepModules();
 
 			
 			$.info(`--------- 结束 ---------\n`);
@@ -428,6 +454,39 @@ async function testAllKeepModules() {
     }
 }
 
+async function refresh_vusession() {
+	return new Promise((resolve) => {
+			let opt = {
+				url: `https://pbaccess.video.qq.com/trpc.video_account_login.web_login_trpc.WebLoginTrpc/NewRefresh?video_appid=3000010`,
+				headers: {
+					cookie: txspRefreshCookie,
+					origin: 'https://v.qq.com',
+					referer: 'https://v.qq.com/',
+					'Content-Type': 'application/json'
+				},
+				body: txspRefreshBody
+			};
+			$.post(opt, async (error, resp, data) => {
+				if (safeGet(data)) {
+					var obj = JSON.parse(data);
+					if (obj.data.errcode === 0) {
+						let vqq_vusession = obj.data.vusession;
+						nickname = decodeURIComponent(obj.data.nick);
+						if (txspCookie.match(/main_login=([^;]*)/)[1] === "qq"){
+							txspCookie = txspCookie.replace(/(vqq_vusession=)[^;]*/, `$1${vqq_vusession}`);
+						} else if(txspCookie.match(/main_login=([^;]*)/)[1] === "wx"){
+							txspCookie = txspCookie.replace(/(vusession=)[^;]*/, `$1${vusession}`);
+						}
+						$.info("刷新vusession成功")
+					} else {
+						$.warn("刷新vusession失败");
+					}
+					resolve();
+				}
+            }        
+        )
+    })
+}
 
 async function getVipInfo() {
     return new Promise((resolve, reject) => {
@@ -673,6 +732,43 @@ async function completeWatchVideoTask() {
 			}
 		});
 	});
+}
+
+/**
+ * 安全获取数据检查函数
+ * @function safeGet
+ * @param {string} data 
+ * @returns {boolean}
+ */
+function safeGet(data) {
+    try {
+        if (!data) {
+            $.error("❌ 响应数据为空");
+            return false;
+        }
+        
+        if (typeof data !== 'string') {
+            $.error(`❌ 响应数据不是字符串类型: ${typeof data}`);
+            return false;
+        }
+        
+        if (data.trim() === '') {
+            $.error("❌ 响应数据为空字符串");
+            return false;
+        }
+        
+        const parsed = JSON.parse(data);
+        if (typeof parsed === "object") {
+            return true;
+        } else {
+            $.error(`❌ 解析后的数据不是对象: ${typeof parsed}`);
+            return false;
+        }
+    } catch (e) {
+        $.error(`❌ JSON解析失败: ${e}`);
+        $.error(`❌ 原始数据: ${data}`);
+        return false;
+    }
 }
 
 function getCookie() {
