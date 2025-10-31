@@ -120,9 +120,9 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 			$.info(`--------- 结束 ---------\n`);
 
 			// 使用完整版Keep月卡兑换
-			//await completeKeepExchange();
+			await completeKeepExchange();
 			// 可选：测试所有模块（调试用）
-			await testAllKeepModules();
+			//await testAllKeepModules();
 
 			
 			$.info(`--------- 结束 ---------\n`);
