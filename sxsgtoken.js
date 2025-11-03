@@ -2,15 +2,15 @@
 -------------- Quantumult X 配置 --------------
 
 [MITM]
-hostname = st06.sentezhenxuan.com
+hostname = n03.sentezhenxuan.com
 
 [rewrite_local]
-^https:\/\/st06\.sentezhenxuan\.com\/api\/user url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsgtoken.js
+^https:\/\/n03\.sentezhenxuan\.com\/api\/user url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsgtoken.js
 */
 // capture-sxsgtoken-simple.js - 极简版本
 const url = $request.url;
 
-if (url.includes('st06.sentezhenxuan.com/api/user')) {
+if (url.includes('n03.sentezhenxuan.com/api/user')) {
     try {
         const headers = $request.headers;
         let auth = headers['Authori-zation'] || headers['Authorization'];
