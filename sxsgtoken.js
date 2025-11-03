@@ -7,7 +7,8 @@ hostname = n03.sentezhenxuan.com
 [rewrite_local]
 ^https:\/\/n03\.sentezhenxuan\.com\/api\/user url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsgtoken.js
 */
-// capture-sxsgtoken-simple.js - 极简版本
+
+// capture-sxsgtoken-simple.js - 保留Bearer前缀版本
 const url = $request.url;
 
 if (url.includes('n03.sentezhenxuan.com/api/user')) {
@@ -16,14 +17,7 @@ if (url.includes('n03.sentezhenxuan.com/api/user')) {
         let auth = headers['Authori-zation'] || headers['Authorization'];
         
         if (auth) {
-            // 去掉Bearer前缀
-            if (auth.startsWith('Bearer ')) {
-                auth = auth.substring(7);
-            } else if (auth.startsWith('bearer ')) {
-                auth = auth.substring(7);
-            }
-            
-            // 保存当前token
+            // 直接保存完整的Authorization头（包含Bearer前缀）
             $prefs.setValueForKey(auth, 'sxsgtoken_current');
             
             // 多账号管理
@@ -38,7 +32,7 @@ if (url.includes('n03.sentezhenxuan.com/api/user')) {
             $notify(
                 '📱 SXSGTOKEN',
                 `账号${allTokens.length}个`,
-                auth.substring(0, 20) + '...'
+                auth.substring(0, 25) + '...'
             );
             
             $tool.copy(auth);
