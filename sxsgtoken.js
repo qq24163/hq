@@ -27,11 +27,11 @@ if (url.includes('n03.sentezhenxuan.com/api/user')) {
             $prefs.setValueForKey(auth, 'sxsgtoken_current');
             
             // 多账号管理
-            let allTokens = ($prefs.valueForKey('SXSGTOKEN') || '').split('#').filter(t => t);
+            let allTokens = ($prefs.valueForKey('SXSGTOKEN') || '').split('&').filter(t => t);
             if (!allTokens.includes(auth)) {
                 if (allTokens.length >= 10) allTokens.shift();
                 allTokens.push(auth);
-                $prefs.setValueForKey(allTokens.join('#'), 'SXSGTOKEN');
+                $prefs.setValueForKey(allTokens.join('&'), 'SXSGTOKEN');
             }
             
             // 单条通知
