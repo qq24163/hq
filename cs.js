@@ -1,9 +1,9 @@
 /**
- * 腾讯视频任务接口探索脚本
- * 用于找到正确的完成任务接口
+ * 腾讯视频接口深度调试脚本
+ * 通过分析现有请求来找到正确的接口
  */
 
-const $ = new Env("腾讯视频接口探索");
+const $ = new Env("腾讯视频深度调试");
 
 let txspCookie = ($.isNode() ? process.env.txspCookie : $.getdata('txspCookie')) || "";
 
@@ -13,79 +13,151 @@ let txspCookie = ($.isNode() ? process.env.txspCookie : $.getdata('txspCookie'))
         return;
     }
     
-    $.info("===== 开始探索完成任务接口 =====");
+    $.info("===== 开始深度调试 =====");
     
-    // 尝试多种可能的接口
-    await exploreCompleteInterfaces();
+    // 1. 首先获取任务详情，分析数据结构
+    await analyzeTaskStructure();
+    await $.wait(2000);
     
-    $.info("===== 探索结束 =====");
+    // 2. 尝试模拟App的请求方式
+    await simulateAppRequests();
+    
+    $.info("===== 调试结束 =======\n");
+    $.info("💡 建议：如果自动方式都不成功，可以尝试手动在App中领取一次，然后观察网络请求");
     
 })()
 .catch((e) => $.error(e))
 .finally(() => $.done());
 
-async function exploreCompleteInterfaces() {
-    const interfaces = [
+async function analyzeTaskStructure() {
+    $.info("\n1. 分析任务数据结构...");
+    
+    let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReadTaskList?rpc_data=%7B%22business_id%22:%221%22,%22platform%22:5%7D`;
+    
+    let opt = {
+        url: url,
+        headers: {
+            'Cookie': txspCookie,
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+            'Referer': 'https://film.video.qq.com/x/grade/',
+            'Origin': 'https://film.video.qq.com'
+        },
+    };
+    
+    $.get(opt, async (error, resp, data) => {
+        try {
+            if (data && data.length > 0) {
+                var obj = JSON.parse(data);
+                
+                if (obj.ret === 0) {
+                    let taskList = obj.task_list || [];
+                    let watchTask = taskList.find(task => task.task_id === 215);
+                    
+                    if (watchTask) {
+                        $.info(`任务215详情分析:`);
+                        $.info(`- 任务类型: ${watchTask.task_type}`);
+                        $.info(`- 任务来源: ${watchTask.task_source}`);
+                        $.info(`- 任务标记: ${watchTask.task_mark}`);
+                        $.info(`- 关联ID: ${watchTask.task_correlation_id}`);
+                        $.info(`- 任务编号: ${watchTask.task_no}`);
+                        
+                        // 分析阶段任务
+                        if (watchTask.phase_tasks) {
+                            $.info(`- 阶段数量: ${watchTask.phase_tasks.length}`);
+                            for (let i = 0; i < watchTask.phase_tasks.length; i++) {
+                                let phase = watchTask.phase_tasks[i];
+                                $.info(`  阶段${i}: ${phase.sub_title}, 状态${phase.task_status}, 奖励${phase.can_receive_score}`);
+                            }
+                        }
+                        
+                        // 分析任务URL
+                        if (watchTask.task_url) {
+                            try {
+                                let taskUrlObj = JSON.parse(watchTask.task_url);
+                                $.info(`- 任务URL结构: ${JSON.stringify(taskUrlObj)}`);
+                            } catch (e) {
+                                $.info(`- 任务URL: ${watchTask.task_url}`);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            $.error(`分析失败: ${e}`);
+        }
+    });
+}
+
+async function simulateAppRequests() {
+    $.info("\n2. 模拟App请求方式...");
+    
+    // 基于常见模式尝试各种参数组合
+    const attempts = [
         {
-            name: "接口1 - 标准完成任务",
+            name: "尝试1 - 标准rpc_data格式",
             url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/CompleteTask",
-            method: "GET",
-            params: {"task_id": 215}
+            params: {"rpc_data": "{\"task_id\":215}"}
         },
         {
-            name: "接口2 - 领取阶段奖励",
+            name: "尝试2 - 包含业务ID",
+            url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/CompleteTask", 
+            params: {"rpc_data": "{\"task_id\":215,\"business_id\":1}"}
+        },
+        {
+            name: "尝试3 - 包含平台信息",
+            url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/CompleteTask",
+            params: {"rpc_data": "{\"task_id\":215,\"business_id\":1,\"platform\":5}"}
+        },
+        {
+            name: "尝试4 - 阶段奖励领取(索引0)",
             url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReceivePhaseReward",
-            method: "GET", 
-            params: {"task_id": 215, "phase_index": 0}
+            params: {"rpc_data": "{\"task_id\":215,\"phase_index\":0}"}
         },
         {
-            name: "接口3 - 领取阶段奖励(索引1)",
+            name: "尝试5 - 阶段奖励领取(索引1)", 
             url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReceivePhaseReward",
-            method: "GET",
-            params: {"task_id": 215, "phase_index": 1}
+            params: {"rpc_data": "{\"task_id\":215,\"phase_index\":1}"}
         },
         {
-            name: "接口4 - 用户完成任务",
-            url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/CompleteUserTask",
-            method: "GET",
-            params: {"task_id": 215}
+            name: "尝试6 - 报告进度后领取",
+            url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReportTaskProgress",
+            params: {"rpc_data": "{\"task_id\":215,\"progress\":120}"} // 假设观看120分钟
         },
         {
-            name: "接口5 - 领取任务奖励",
-            url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReceiveTaskReward",
-            method: "GET",
-            params: {"task_id": 215}
-        },
-        {
-            name: "接口6 - 旧版完成任务",
-            url: "https://vip.video.qq.com/fcgi-bin/comm_task",
-            method: "GET",
-            params: {"task_id": 215, "action": "complete"}
+            name: "尝试7 - 使用POST方法",
+            url: "https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/CompleteTask",
+            method: "POST",
+            body: {"task_id": 215}
         }
     ];
 
-    for (let interface of interfaces) {
-        $.info(`\n尝试: ${interface.name}`);
-        let success = await tryInterface(interface);
+    for (let attempt of attempts) {
+        $.info(`\n${attempt.name}`);
+        let success = await tryDetailedRequest(attempt);
         if (success) {
-            $.info(`✅ 发现有效接口!`);
+            $.info(`✅ 发现有效方法!`);
+            // 如果报告进度成功，再尝试领取
+            if (attempt.name.includes("报告进度")) {
+                await $.wait(2000);
+                await tryReceiveAfterReport();
+            }
             break;
         }
         await $.wait(2000);
     }
 }
 
-async function tryInterface(interfaceInfo) {
+async function tryDetailedRequest(attempt) {
     return new Promise((resolve) => {
-        let url = interfaceInfo.url;
+        let url = attempt.url;
         
-        // 构建查询参数
-        if (interfaceInfo.method === "GET" && interfaceInfo.params) {
-            const params = new URLSearchParams(interfaceInfo.params).toString();
+        // 构建GET参数
+        if (attempt.method !== "POST" && attempt.params) {
+            const params = new URLSearchParams(attempt.params).toString();
             url += '?' + params;
         }
         
-        $.info(`请求URL: ${url}`);
+        $.info(`请求: ${url}`);
         
         let opt = {
             url: url,
@@ -97,43 +169,67 @@ async function tryInterface(interfaceInfo) {
             },
         };
         
-        // 如果是POST请求，添加body
-        if (interfaceInfo.method === "POST" && interfaceInfo.params) {
-            opt.body = JSON.stringify(interfaceInfo.params);
-            opt.headers['Content-Type'] = 'application/json';
+        // 处理POST请求
+        if (attempt.method === "POST") {
+            if (attempt.body) {
+                opt.body = JSON.stringify(attempt.body);
+                opt.headers['Content-Type'] = 'application/json';
+            }
         }
         
-        const requestMethod = interfaceInfo.method === "POST" ? $.post : $.get;
+        const requestMethod = attempt.method === "POST" ? $.post : $.get;
         
         requestMethod.call($, opt, async (error, resp, data) => {
             try {
-                $.info(`响应状态: ${resp?.status || '无响应'}`);
-                $.info(`响应数据: ${data ? data.substring(0, 200) : '空'}`);
+                $.info(`状态: ${resp?.status || '无'}`);
                 
                 if (data && data.length > 0) {
+                    $.info(`响应: ${data.substring(0, 300)}`);
+                    
                     var obj = JSON.parse(data);
-                    $.info(`返回码: ${obj.ret}, 消息: ${obj.msg || '无'}`);
+                    $.info(`结果: ret=${obj.ret}, msg=${obj.msg || '无'}`);
                     
                     if (obj.ret === 0) {
-                        $.info(`✅ 接口调用成功!`);
-                        if (obj.score || obj.check_in_score) {
-                            $.info(`获得奖励: ${obj.score || obj.check_in_score}V力值`);
-                        }
                         resolve(true);
                     } else {
-                        $.info(`❌ 接口返回错误`);
                         resolve(false);
                     }
                 } else {
-                    $.info(`❌ 返回空数据`);
+                    $.info(`响应: 空数据`);
                     resolve(false);
                 }
             } catch (e) {
-                $.error(`解析失败: ${e}`);
+                $.error(`错误: ${e}`);
                 resolve(false);
             }
         });
     });
+}
+
+async function tryReceiveAfterReport() {
+    $.info("尝试在报告进度后领取奖励...");
+    
+    // 尝试领取两个阶段的奖励
+    for (let i = 0; i < 2; i++) {
+        let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReceivePhaseReward?rpc_data=%7B%22task_id%22:215,%22phase_index%22:${i}%7D`;
+        
+        let opt = {
+            url: url,
+            headers: {
+                'Cookie': txspCookie,
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+                'Referer': 'https://film.video.qq.com/x/grade/'
+            },
+        };
+        
+        $.get(opt, async (error, resp, data) => {
+            if (data) {
+                $.info(`阶段${i}领取响应: ${data}`);
+            }
+        });
+        
+        await $.wait(1500);
+    }
 }
 
 // 精简版 Env 函数
