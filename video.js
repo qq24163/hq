@@ -1,9 +1,9 @@
 /**
 *@file       腾讯视频
 *@desp       本脚本仅适用于腾讯视频会员每日签到，仅测试Quantumult X、青龙（只支持单账号）
-*@env        txspCookie、isSkipTxspCheckIn
-*@updated    2024-7-18
-*@version    v1.0.5
+*@env        txspCookie、txspRefreshCookie、txspRefreshBody、isSkipTxspCheckIn
+*@updated    2024-6-14
+*@version    v1.0.3
 
 🌟 环境变量说明
 txspCookie：腾讯视频app的Cookie
@@ -105,69 +105,259 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 				await readTxspTaskList();
 				await waitRandom(1000, 2000);
 				
-				// 1. 签到任务执行逻辑
+				// 1. 签到任务执行逻辑 - 添加月度统计检查
 				if (!isTxspCheckIn && month_received_score !== month_limit) {
 					$.info(`\n🎫 执行签到任务:`);
 					await txspCheckIn();
 					await waitRandom(1000, 2000);
 				} else if (isTxspCheckIn){
 					$.info(`\n🎫 签到任务:`);
-					$.info(`   状态: ⏭️ 今天已签到，跳过`);
+					$.info(`状态: ⏭️ 今天已签到，跳过`);
 				} else if (month_received_score === month_limit){
 					$.info(`\n🎫 签到任务:`);
-					$.info(`   状态: ⏭️ 本月已满${month_limit}V力值，跳过`);
+					$.info(`状态: ⏭️ 本月已满${month_limit}V力值，跳过`);
 				}
 				
-				// 2. 手机看视频任务执行逻辑
-				if (watchVideoTask) {
+				// 2. 手机看视频任务执行逻辑 - 修复逻辑冲突
+				if (watchVideoTask && month_received_score !== month_limit) {
 					$.info(`\n📱 手机看视频任务:`);
 					
-					if (watchVideoTask.claimable) {
-						let expectedReward = watchVideoTask.claimablePhase.can_receive_score;
-						$.info(`   🎁 可领取奖励: ${expectedReward}V力值`);
-						$.info(`   📺 领取阶段: ${watchVideoTask.claimablePhase.sub_title}`);
-						$.info(`   ⏰ 需要观看: ${watchVideoTask.claimablePhase.need_watch_time}分钟`);
-						$.info(`   🚀 开始领取...`);
-						
+					// 执行手机看视频任务 - 修复：移除重复的条件判断
+					if (watchVideoTask.hasRewardsToClaim) {
+						//$.info(`   开始执行手机看视频任务...`);
 						await completeWatchVideoTask();
 						await waitRandom(1000, 2000);
 					} else {
-						$.info(`   ℹ️ 当前阶段状态:`);
-						if (watchVideoTask.phase_tasks) {
-							watchVideoTask.phase_tasks.forEach((phase, index) => {
-								let statusIcon = phase.task_status === 3 ? '🎁' : 
-											   phase.task_status === 1 ? '✅' : 
-											   phase.task_status === 0 ? '⏳' : '❓';
-								$.info(`      ${statusIcon} ${phase.sub_title}: ${getTaskStatusText(phase.task_status)} (${phase.can_receive_score}V力值)`);
-							});
-						}
-						$.info(`   💡 提示: 请观看视频满足时长要求后再次执行`);
+						$.info(`状态: 无奖励可领取`);
+						$.taskInfo += `手机看视频任务: 无奖励可领\n`;
+						$.info(`💡 提示: 请观看视频满足时长要求后再次执行`);
 					}
+				} else if (month_received_score === month_limit) {
+					$.info(`\n📱 手机看视频任务:`);
+					$.info(`状态: ⏭️ 本月已满${month_limit}V力值，跳过`);
 				} else {
 					$.warn(`未找到手机看视频任务，跳过执行`);
 				}
-			}
+				
+			} // 这里结束 isSkipTxspCheckIn 的 else 块
+			
 			$.info(`--------- 结束 ---------\n`);
-			// 使用完整版Keep月卡兑换
-			await completeKeepExchange();
+			
+			// 其他任务 - 确保这些在 isSkipTxspCheckIn 条件之外执行
+			// 最高3天会员任务
+			await mondayMemberTask();
 			$.info(`--------- 结束 ---------\n`);
+			
 			// 周二会员联名日任务
 			await tuesdayMemberTask();
+			$.info(`--------- 结束 ---------\n`);
+			
+			// 使用完整版Keep月卡兑换
+			await completeKeepExchange();
 			$.info(`--------- 结束 ---------\n`);
 		}
 		await SendMsg();
 	})()
-		.catch((e) => $.error(e))
-		.finally(() => $.done());
+	.catch((e) => $.error(e))
+	.finally(() => $.done());
 }
 
-// 周二会员联名日活动配置 - 可在此处修改act_id
+// 周二会员联名日活动配置
 const TUESDAY_ACTIVITY_CONFIG = {
-    act_id: "taui7z3sl7ae6ajo35ki4jj11u" // 如果活动ID变化，只需修改这里
+    act_id: "taui7z3sl7ae6ajo35ki4jj11u", // 默认活动ID，如果自动获取失败则使用此ID
+    aid: "V0$$8:2010" // 默认aid
+};
+
+// Keep活动配置
+const KEEP_ACTIVITY_CONFIG = {
+    act_id: "9y6scr7xd58aq9zsk7oe5gdf8a", // 默认活动ID，如果自动获取失败则使用此ID
+    aid: "V0$$2:7$8:2003$3:9.02.20$34:1" // 默认aid
 };
 
 /**
- * 周二会员联名日任务 - 简洁版
+ * 获取最新的周二会员联名日活动信息
+ * @async
+ * @function getLatestTuesdayActivity
+ * @returns {Promise<Object>}
+ */
+async function getLatestTuesdayActivity() {
+    return new Promise((resolve) => {
+        $.info(`🔄 开始获取最新的周二会员联名日活动信息...`);
+        
+        const url = `https://vip.video.qq.com/rpc/trpc.vipcontent.vip_area_channel.VIPAreaChannelRPC/Events?rpc_encode=rurl&rpc_data=%7B%22tab%22:2,%22month%22:11,%22page%22:1,%22page_size%22:10%7D`;
+        
+        let opt = {
+            url: url,
+            headers: {
+                'Cookie': txspCookie,
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+                'Referer': 'https://vip.video.qq.com/',
+                'Origin': 'https://vip.video.qq.com',
+                'Accept': 'application/json',
+                'Accept-Language': 'zh-CN,zh;q=0.9'
+            },
+            timeout: 15000
+        };
+        
+        $.get(opt, (error, resp, data) => {
+            try {
+                if (error) {
+                    $.warn(`获取活动信息网络错误: ${error}`);
+                    resolve(TUESDAY_ACTIVITY_CONFIG); // 返回默认配置
+                    return;
+                }
+                
+                if (!data) {
+                    $.warn(`活动信息返回数据为空`);
+                    resolve(TUESDAY_ACTIVITY_CONFIG); // 返回默认配置
+                    return;
+                }
+                
+                const obj = JSON.parse(data);
+                
+                if (obj.events && obj.events.length > 0) {
+                    // 查找最新的周二会员联名日活动
+                    const tuesdayEvent = obj.events.find(event => 
+                        event.subtitle && event.subtitle.includes("周二会员联名日") && 
+                        event.button_url && event.button_url.includes("magic-act")
+                    );
+                    
+                    if (tuesdayEvent && tuesdayEvent.button_url) {
+                        // 提取活动ID
+                        const actIdMatch = tuesdayEvent.button_url.match(/magic-act\/([^\/]+)/);
+                        if (actIdMatch && actIdMatch[1]) {
+                            const newActId = actIdMatch[1];
+                            
+                            // 提取aid参数
+                            let newAid = TUESDAY_ACTIVITY_CONFIG.aid; // 默认aid
+                            const aidMatch = tuesdayEvent.button_url.match(/aid=([^&]+)/);
+                            if (aidMatch && aidMatch[1]) {
+                                // 将URL编码的aid转换为脚本需要的格式
+                                newAid = decodeURIComponent(aidMatch[1]).replace(/\$/g, '$$');
+                            }
+                            
+                            $.info(`✅ 成功获取最新活动信息:`);
+                            $.info(`   活动ID: ${newActId}`);
+                            $.info(`   aid: ${newAid}`);
+                            $.info(`   活动标题: ${tuesdayEvent.title}`);
+                            $.info(`   活动副标题: ${tuesdayEvent.subtitle}`);
+                            
+                            resolve({
+                                act_id: newActId,
+                                aid: newAid
+                            });
+                            return;
+                        }
+                    }
+                    
+                    $.warn(`未找到有效的周二会员联名日活动`);
+                } else {
+                    $.warn(`活动列表为空`);
+                }
+                
+                // 如果自动获取失败，使用默认配置
+                $.info(`⚠️ 使用默认活动配置`);
+                resolve(TUESDAY_ACTIVITY_CONFIG);
+                
+            } catch (e) {
+                $.error(`解析活动信息失败: ${e}`);
+                resolve(TUESDAY_ACTIVITY_CONFIG); // 返回默认配置
+            }
+        });
+    });
+}
+
+/**
+ * 获取最新的Keep活动信息
+ * @async
+ * @function getLatestKeepActivity
+ * @returns {Promise<Object>}
+ */
+async function getLatestKeepActivity() {
+    return new Promise((resolve) => {
+        $.info(`🔄 开始获取最新的Keep活动信息...`);
+        
+        const url = `https://vip.video.qq.com/rpc/trpc.vipcontent.vip_area_channel.VIPAreaChannelRPC/LevelBenefits?rpc_encode=rurl&rpc_data=%7B%22is_prepublish%22:0,%22after_all_received%22:true,%22from%22:%22vip-exclusive-center%22%7D`;
+        
+        let opt = {
+            url: url,
+            headers: {
+                'Cookie': txspCookie,
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+                'Referer': 'https://vip.video.qq.com/',
+                'Origin': 'https://vip.video.qq.com',
+                'Accept': 'application/json',
+                'Accept-Language': 'zh-CN,zh;q=0.9'
+            },
+            timeout: 15000
+        };
+        
+        $.get(opt, (error, resp, data) => {
+            try {
+                if (error) {
+                    $.warn(`获取Keep活动信息网络错误: ${error}`);
+                    resolve(KEEP_ACTIVITY_CONFIG); // 返回默认配置
+                    return;
+                }
+                
+                if (!data) {
+                    $.warn(`Keep活动信息返回数据为空`);
+                    resolve(KEEP_ACTIVITY_CONFIG); // 返回默认配置
+                    return;
+                }
+                
+                const obj = JSON.parse(data);
+                
+                if (obj.level_infos && obj.level_infos.length > 0) {
+                    // 遍历所有等级信息，查找会员全家桶活动
+                    for (let levelInfo of obj.level_infos) {
+                        if (levelInfo.list && levelInfo.list.length > 0) {
+                            // 查找会员全家桶活动
+                            const keepActivity = levelInfo.list.find(item => 
+                                item.title && item.title.includes("会员全家桶") && 
+                                item.jump_url && item.jump_url.includes("magic-act")
+                            );
+                            
+                            if (keepActivity && keepActivity.jump_url) {
+                                // 提取活动ID
+                                const actIdMatch = keepActivity.jump_url.match(/magic-act\/([^\/]+)/);
+                                if (actIdMatch && actIdMatch[1]) {
+                                    const newActId = actIdMatch[1];
+                                    
+                                    $.info(`✅ 成功获取最新Keep活动信息:`);
+                                    $.info(`   活动ID: ${newActId}`);
+                                    $.info(`   活动标题: ${keepActivity.title}`);
+                                    $.info(`   活动类型: ${keepActivity.type}`);
+                                    
+                                    resolve({
+                                        act_id: newActId,
+                                        aid: KEEP_ACTIVITY_CONFIG.aid // 使用默认aid
+                                    });
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    
+                    $.warn(`未找到有效的Keep会员全家桶活动`);
+                } else {
+                    $.warn(`等级信息列表为空`);
+                }
+                
+                // 如果自动获取失败，使用默认配置
+                $.info(`⚠️ 使用默认Keep活动配置`);
+                resolve(KEEP_ACTIVITY_CONFIG);
+                
+            } catch (e) {
+                $.error(`解析Keep活动信息失败: ${e}`);
+                resolve(KEEP_ACTIVITY_CONFIG); // 返回默认配置
+            }
+        });
+    });
+}
+
+/**
+ * 周二会员联名日任务 - 自动获取活动ID版本
  * @async
  * @function tuesdayMemberTask
  * @returns
@@ -187,6 +377,13 @@ async function tuesdayMemberTask() {
     $.info(`🗓️ 今天是周二，开始执行会员联名日任务`);
     
     try {
+        // 获取最新的活动信息
+        const activityConfig = await getLatestTuesdayActivity();
+        
+        $.info(`🎯 使用活动配置:`);
+        $.info(`   活动ID: ${activityConfig.act_id}`);
+        $.info(`   aid: ${activityConfig.aid}`);
+        
         // 定义两个抽奖任务
         const tuesdayTasks = [
             { moduleId: "tqtwqu93llhj3h7jkqxgd8ooel", name: "第一个抽奖任务" },
@@ -198,20 +395,12 @@ async function tuesdayMemberTask() {
             const task = tuesdayTasks[i];
             $.info(`\n🔄 执行${task.name}...`);
             
-            const result = await participateTuesdayLottery(task.moduleId, task.name);
+            const result = await participateTuesdayLottery(activityConfig, task.moduleId, task.name);
             
             if (result.success) {
                 if (result.prizeType === 'vscore') {
                     $.info(`🎉 获得: ${result.prizeName}`);
                     $.taskInfo += `周二会员联名日: 获得${result.prizeName}\n`;
-                    
-                    // 更新月度统计
-                    if (result.vscoreValue && month_received_score && !isNaN(month_received_score)) {
-                        const vscore = parseInt(result.vscoreValue);
-                        if (!isNaN(vscore)) {
-                            month_received_score = parseInt(month_received_score) + vscore;
-                        }
-                    }
                 } else {
                     $.info(`🎉 获得: ${result.prizeName}`);
                     $.taskInfo += `周二会员联名日: 获得${result.prizeName}\n`;
@@ -238,18 +427,19 @@ async function tuesdayMemberTask() {
 }
 
 /**
- * 参与周二会员联名日抽奖
+ * 参与周二会员联名日抽奖（使用动态获取的活动配置）
  * @async
  * @function participateTuesdayLottery
+ * @param {Object} activityConfig 活动配置
  * @param {string} moduleId 
  * @param {string} taskName 
  * @returns {Promise<Object>}
  */
-async function participateTuesdayLottery(moduleId, taskName) {
+async function participateTuesdayLottery(activityConfig, moduleId, taskName) {
     return new Promise((resolve) => {
         const timestamp = Date.now();
-        // 使用配置的活动ID，方便后续修改
-        const url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?platform=7&type=100143&option=100&act_id=${TUESDAY_ACTIVITY_CONFIG.act_id}&module_id=${moduleId}&ptag=ad.channel.calendar.2&is_prepublish=&aid=V0$$8:2010&otype=xjson&_ts=${timestamp}`;
+        // 使用动态获取的活动配置
+        const url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?platform=7&type=100143&option=100&act_id=${activityConfig.act_id}&module_id=${moduleId}&ptag=ad.channel.calendar.2&is_prepublish=&aid=${activityConfig.aid}&otype=xjson&_ts=${timestamp}`;
         
         let opt = {
             url: url,
@@ -350,13 +540,8 @@ async function participateTuesdayLottery(moduleId, taskName) {
     });
 }
 
-// Keep活动配置 - 可在此处修改act_id
-const KEEP_ACTIVITY_CONFIG = {
-    act_id: "9y6scr7xd58aq9zsk7oe5gdf8a" // 如果活动ID变化，只需修改这里
-};
-
 /**
- * 完整版Keep月卡兑换脚本（每月8/18/28日同时执行三个任务）
+ * 完整版Keep月卡兑换脚本（每月8/18/28日同时执行三个任务）- 自动获取活动ID版本
  * @async
  * @function completeKeepExchange
  * @returns
@@ -377,6 +562,13 @@ async function completeKeepExchange() {
     $.info(`🗓️ 今天是${date}号，开始同时执行三个Keep月卡任务`);
     
     try {
+        // 获取最新的Keep活动信息
+        const keepConfig = await getLatestKeepActivity();
+        
+        $.info(`🎯 使用Keep活动配置:`);
+        $.info(`   活动ID: ${keepConfig.act_id}`);
+        $.info(`   aid: ${keepConfig.aid}`);
+        
         // 定义三个Keep月卡任务
         const keepTasks = [
             { moduleId: "xhx9iz36qw48e6ppjho5sk5pql", name: "8日Keep月卡" },
@@ -389,7 +581,7 @@ async function completeKeepExchange() {
             const task = keepTasks[i];
             $.info(`\n🔄 执行第${i + 1}个Keep月卡任务 (${task.name})...`);
             
-            const result = await receiveKeepPrizeAdvanced(task.moduleId, task.name);
+            const result = await receiveKeepPrizeAdvanced(keepConfig, task.moduleId, task.name);
             
             if (result.success) {
                 $.info(`🎉 获得: Keep月卡兑换码: ${result.cdkey}`);
@@ -416,18 +608,19 @@ async function completeKeepExchange() {
 }
 
 /**
- * 高级版Keep奖品领取（包含完整错误处理）
+ * 高级版Keep奖品领取（包含完整错误处理）- 使用动态配置版本
  * @async
  * @function receiveKeepPrizeAdvanced
+ * @param {Object} keepConfig Keep活动配置
  * @param {string} moduleId 
  * @param {string} moduleName 
  * @returns {Promise<Object>}
  */
-async function receiveKeepPrizeAdvanced(moduleId, moduleName) {
+async function receiveKeepPrizeAdvanced(keepConfig, moduleId, moduleName) {
     return new Promise((resolve) => {
         let timestamp = Date.now();
-        // 使用配置的活动ID，方便后续修改
-        let url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?platform=7&type=100251&option=100&act_id=${KEEP_ACTIVITY_CONFIG.act_id}&module_id=${moduleId}&ptag=channel.rightmodule&is_prepublish=&aid=V0$$2:7$8:2003$3:9.02.20$34:1&otype=xjson&_ts=${timestamp}`;
+        // 使用动态获取的活动配置
+        let url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?platform=7&type=100251&option=100&act_id=${keepConfig.act_id}&module_id=${moduleId}&ptag=channel.rightmodule&is_prepublish=&aid=${keepConfig.aid}&otype=xjson&_ts=${timestamp}`;
         
         let opt = {
             url: url,
@@ -723,9 +916,126 @@ async function getVipInfo() {
     })
 }
 
+/**
+ * 获取腾讯视频任务列表
+ * @async
+ * @function readTxspTaskList
+ * @returns
+ */
 async function readTxspTaskList() {
+	return new Promise((resolve) => {
+		let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReadTaskList?rpc_data=%7B%22business_id%22:%221%22,%22platform%22:5%7D`;
+		
+		let opt = {
+			url: url,
+			headers: {
+				'Cookie': txspCookie,
+				'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+				'Referer': 'https://film.video.qq.com/x/grade/?ovscroll=0&hidetitlebar=1&ptag=channel.rightmodule&jump_task=1&aid=V0$$2:7$8:2003$3:9.02.20$34:1&isDarkMode=0&uiType=REGULAR',
+				'Origin': 'https://film.video.qq.com'
+			},
+		};
+		$.get(opt, async (error, resp, data) => {
+			try {
+				if (error) {
+					$.error(`获取任务列表网络错误: ${error}`);
+					resolve();
+					return;
+				}
+				
+				if (data && data.length > 0) {
+					var obj = JSON.parse(data);
+					
+					if (obj.ret === 0) {
+						// 获取限制信息
+						month_received_score = obj.limit_info?.month_received_score || "0";
+						month_limit = obj.limit_info?.month_limit || "0";
+						
+						let taskList = obj.task_list || [];
+						$.info(`获取到${taskList.length}个任务`);
+						
+						if (taskList && taskList.length > 0) {
+							// 查找签到任务
+							let txspCheckInTask = taskList.find(task => 
+								task.task_id === 101 || 
+								task.task_maintitle === "VIP会员每日签到"
+							);
+							
+							if (txspCheckInTask) {
+								isTxspCheckIn = txspCheckInTask.task_status === 1;
+								$.info(`签到任务: ${isTxspCheckIn ? '✅ 已签到' : '⏳ 未签到'}`);
+							} else {
+								$.warn(`未找到签到任务`);
+								isTxspCheckIn = false;
+							}
+							
+							// 查找手机看视频任务 - 简化显示逻辑
+							watchVideoTask = taskList.find(task => 
+								task.task_id === 215 || 
+								task.task_maintitle === "手机看视频" ||
+								task.title === "手机看视频"
+							);
+							
+							if (watchVideoTask) {
+								// 简化的检测逻辑
+								let hasRewardsToClaim = false;
+								
+								// 方法1: 检查整体任务状态
+								if (watchVideoTask.task_status === 3) {
+									hasRewardsToClaim = true;
+								}
+								// 方法2: 检查按钮描述
+								else if (watchVideoTask.task_button_desc === "领取") {
+									hasRewardsToClaim = true;
+								}
+								// 方法3: 检查阶段任务状态
+								else if (watchVideoTask.phase_tasks) {
+									for (let phase of watchVideoTask.phase_tasks) {
+										if (phase.task_status === 1 || phase.task_status === 3) {
+											hasRewardsToClaim = true;
+											break;
+										}
+									}
+								}
+								
+								watchVideoTask.hasRewardsToClaim = hasRewardsToClaim;
+								
+								if (hasRewardsToClaim) {
+									$.info(`手机看视频: 🎯 有奖励可领取`);
+								} else {
+									$.info(`手机看视频: ✅ 已完成`);
+								}
+								
+							} else {
+								$.warn(`未找到手机看视频任务`);
+							}
+							
+							$.info(`本月V力值: ${month_received_score}/${month_limit}`);
+						} else {
+							$.warn(`任务列表为空`);
+							isTxspCheckIn = false;
+						}
+					} else {
+						$.warn(`获取任务列表失败: ret=${obj.ret}`);
+						isTxspCheckIn = false;
+					}
+				} else {
+					$.error(`获取任务列表返回空数据`);
+					isTxspCheckIn = false;
+				}
+				resolve();
+			} catch (e) {
+				$.error(`解析任务列表失败: ${e}`);
+				isTxspCheckIn = false;
+				resolve();
+			}
+		});
+	});
+}
+
+async function txspCheckIn() {
     return new Promise((resolve) => {
-        let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReadTaskList?rpc_data=%7B%22business_id%22:%221%22,%22platform%22:5%7D`;
+        let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/CheckIn?rpc_data={}`;
         
         let opt = {
             url: url,
@@ -743,149 +1053,6 @@ async function readTxspTaskList() {
         $.get(opt, async (error, resp, data) => {
             try {
                 if (error) {
-                    $.error(`获取任务列表网络错误: ${error}`);
-                    resolve();
-                    return;
-                }
-                
-                if (!data) {
-                    $.error(`任务列表返回数据为空`);
-                    isTxspCheckIn = false;
-                    resolve();
-                    return;
-                }
-                
-                var obj = JSON.parse(data);
-                
-                if (obj.ret === 0) {
-                    // 月度限制信息
-                    if (obj.limit_info) {
-                        month_received_score = obj.limit_info.month_received_score || "0";
-                        month_limit = obj.limit_info.month_limit || "0";
-                    }
-                    
-                    let taskList = obj.task_list || [];
-                    
-                    if (taskList && taskList.length > 0) {
-                        // 查找签到任务
-                        let txspCheckInTask = taskList.find(task => 
-                            task.task_id === 101 || 
-                            task.task_maintitle === "VIP会员每日签到" ||
-                            task.title === "VIP会员每日签到" ||
-                            (task.task_desc && task.task_desc.includes("签到"))
-                        );
-                        
-                        if (txspCheckInTask) {
-                            isTxspCheckIn = txspCheckInTask.task_status === 1;
-                            $.info(`✅ 找到签到任务: 任务ID: ${txspCheckInTask.task_id}, 状态: ${isTxspCheckIn ? '已签到' : '未签到'}`);
-                        } else {
-                            $.warn(`未找到签到任务`);
-                            isTxspCheckIn = false;
-                        }
-                        
-                        // 查找手机看视频任务
-                        watchVideoTask = taskList.find(task => 
-                            task.task_id === 215 || 
-                            task.task_id === "215" ||
-                            task.task_maintitle === "手机看视频" ||
-                            task.task_maintitle === "观看视频" ||
-                            task.title === "手机看视频" ||
-                            task.title === "观看视频" ||
-                            task.title === "看视频" ||
-                            (task.task_desc && task.task_desc.includes("手机看视频")) ||
-                            (task.task_desc && task.task_desc.includes("观看视频")) ||
-                            (task.task_desc && task.task_desc.includes("看视频"))
-                        );
-                        
-                        if (watchVideoTask) {
-                            $.info(`✅ 找到手机看视频任务: 任务ID: ${watchVideoTask.task_id}`);
-                            
-                            // 检查是否有阶段任务
-                            if (watchVideoTask.phase_tasks && watchVideoTask.phase_tasks.length > 0) {
-                                $.info(`   📊 阶段任务详情:`);
-                                watchVideoTask.phase_tasks.forEach((phase, index) => {
-                                    $.info(`     阶段${index + 1}: ${phase.sub_title}`);
-                                    $.info(`       需要观看: ${phase.need_watch_time}分钟`);
-                                    $.info(`       可获得V力值: ${phase.can_receive_score}`);
-                                    $.info(`       状态: ${phase.task_status} (${getTaskStatusText(phase.task_status)})`);
-                                    $.info(`       ---`);
-                                });
-                                
-                                // 查找可领取的阶段任务
-                                let claimablePhase = null;
-                                let claimablePhaseIndex = -1;
-                                
-                                watchVideoTask.phase_tasks.forEach((phase, idx) => {
-                                    // 状态3是可领取状态
-                                    if (phase.task_status === 3) { 
-                                        claimablePhase = phase;
-                                        claimablePhaseIndex = idx;
-                                        $.info(`   🎯 发现可领取阶段: ${phase.sub_title}, 状态: 可领取`);
-                                    }
-                                });
-                                
-                                if (claimablePhase) {
-                                    $.info(`   ✅ 确定可领取阶段: ${claimablePhase.sub_title}`);
-                                    $.info(`     可获V力值: ${claimablePhase.can_receive_score}`);
-                                    $.info(`     需要观看: ${claimablePhase.need_watch_time}分钟`);
-                                    $.info(`     阶段索引: ${claimablePhaseIndex}`);
-                                    
-                                    watchVideoTask.claimable = true;
-                                    watchVideoTask.claimablePhase = claimablePhase;
-                                    watchVideoTask.claimablePhaseIndex = claimablePhaseIndex;
-                                } else {
-                                    $.info(`   ⏳ 无可领取阶段`);
-                                    watchVideoTask.claimable = false;
-                                }
-                            } else {
-                                $.warn(`   无阶段任务信息`);
-                                watchVideoTask.claimable = false;
-                            }
-                        } else {
-                            $.warn(`未找到手机看视频任务`);
-                        }
-                    } else {
-                        $.warn(`任务列表为空`);
-                        isTxspCheckIn = false;
-                    }
-                } else {
-                    $.warn(`获取任务列表失败: ${obj.msg || '未知错误'}`);
-                    isTxspCheckIn = false;
-                }
-            } catch (e) {
-                $.error(`解析任务列表失败: ${e}`);
-                isTxspCheckIn = false;
-            }
-            resolve();
-        });
-    });
-}
-
-async function txspCheckIn() {
-    return new Promise((resolve) => {
-        let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/PerformTask`;
-        
-        let opt = {
-            url: url,
-            headers: {
-                'Cookie': txspCookie,
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-                'Referer': 'https://film.video.qq.com/x/grade/',
-                'Origin': 'https://film.video.qq.com',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Accept-Language': 'zh-CN,zh;q=0.9'
-            },
-            body: JSON.stringify({
-                "business_id": "1",
-                "task_id": 101
-            }),
-            timeout: 15000
-        };
-        
-        $.post(opt, async (error, resp, data) => {
-            try {
-                if (error) {
                     $.error(`签到网络错误: ${error}`);
                     resolve();
                     return;
@@ -900,16 +1067,17 @@ async function txspCheckIn() {
                 var obj = JSON.parse(data);
                 
                 if (obj.ret === 0) {
-                    let score = obj.score || 0;
-                    let totalScore = obj.total_score || 0;
+                    let score = obj.check_in_score || 0;
                     
                     $.info(`   ✅ 签到成功！获得 ${score} V力值`);
-                    $.info(`   📊 当前总V力值: ${totalScore}`);
                     
                     // 更新月度统计
                     if (month_received_score && !isNaN(month_received_score) && score && !isNaN(score)) {
                         month_received_score = parseInt(month_received_score) + parseInt(score);
+                        $.info(`   📈 月度V力值统计: ${month_received_score}/${month_limit}`);
                     }
+                } else if (obj.ret === -2002) {
+                    $.info(`   ℹ️ 今天已签到，明日再来吧`);
                 } else {
                     $.warn(`   ❌ 签到失败: ${obj.msg || '未知错误'}`);
                 }
@@ -923,88 +1091,287 @@ async function txspCheckIn() {
 
 async function completeWatchVideoTask() {
     return new Promise((resolve) => {
-        if (!watchVideoTask || !watchVideoTask.claimable) {
-            $.warn(`无可领取的观看视频任务奖励`);
+        $.info(`开始处理手机看视频任务...`);
+        
+        (async () => {
+            let claimedScore = 0;
+            
+            // 使用您发现的 ProvideAward 接口
+            claimedScore = await useProvideAwardInterface();
+            
+            if (claimedScore > 0) {
+                //$.info(`🎉 成功领取 ${claimedScore}V力值`);
+                $.taskInfo += `手机看视频任务: 领取${claimedScore}V力值\n`;
+                
+                // 更新本月已获得V力值
+                await updateMonthlyScore(claimedScore);
+            } else {
+                //$.warn(`领取失败，可能需要手动操作`);
+                $.taskInfo += `手机看视频任务: 领取失败\n`;
+            }
             resolve();
-            return;
+        })();
+    });
+}
+
+async function useProvideAwardInterface() {
+    let totalClaimed = 0;
+    
+    try {
+        // 尝试分别领取两个阶段
+        $.info(`尝试分别领取阶段奖励...`);
+        
+        // 阶段1：60分钟
+        let result2 = await callProvideAward(1); // 阶段1的ID
+        if (result2 > 0) {
+            totalClaimed += result2;
+            $.info(`✅ 阶段1领取成功: ${result2}V力值`);
         }
         
-        let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/PerformTask`;
+        await waitRandom(1500, 2500);
+        
+        // 阶段2：120分钟  
+        let result3 = await callProvideAward(2); // 阶段2的ID
+        if (result3 > 0) {
+            totalClaimed += result3;
+            $.info(`✅ 阶段2领取成功: ${result3}V力值`);
+        }
+        
+    } catch (e) {
+        $.error(`领取奖励过程出错: ${e}`);
+    }
+    
+    return totalClaimed;
+}
+
+async function callProvideAward(taskId) {
+    return new Promise((resolve) => {
+        let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ProvideAward?rpc_data=%7B%22task_id%22:${taskId}%7D`;
+        
+        let opt = {
+            url: url,
+            headers: getTaskHeaders(),
+        };
+        
+        $.get(opt, async (error, resp, data) => {
+            try {
+                if (error) {
+                    $.error(`请求失败: ${error}`);
+                    resolve(0);
+                    return;
+                }
+                
+                if (data && data.length > 0) {
+                    var obj = JSON.parse(data);
+                    
+                    if (obj.ret === 0) {
+                        let reward = obj.provide_value || obj.score || 0;
+                        $.info(`ProvideAward接口返回: ret=${obj.ret}, provide_value=${obj.provide_value}`);
+                        resolve(reward);
+                    } else if (obj.ret === -2003) {
+                        $.info(`任务${taskId}奖励已领取`);
+                        resolve(0);
+                    } else {
+                        $.warn(`任务${taskId}领取失败: ${obj.ret} - ${obj.err_msg || '未知错误'}`);
+                        resolve(0);
+                    }
+                } else {
+                    $.error(`任务${taskId}返回空数据`);
+                    resolve(0);
+                }
+            } catch (e) {
+                $.error(`解析任务${taskId}响应失败: ${e}`);
+                resolve(0);
+            }
+        });
+    });
+}
+
+// 更新本月V力值统计
+async function updateMonthlyScore(claimedScore) {
+    // 重新获取任务列表来更新统计
+    let url = `https://vip.video.qq.com/rpc/trpc.new_task_system.task_system.TaskSystem/ReadTaskList?rpc_data=%7B%22business_id%22:%221%22,%22platform%22:5%7D`;
+    
+    let opt = {
+        url: url,
+        headers: getTaskHeaders(),
+    };
+    
+    $.get(opt, async (error, resp, data) => {
+        if (data && data.length > 0) {
+            try {
+                var obj = JSON.parse(data);
+                if (obj.ret === 0 && obj.limit_info) {
+                    month_received_score = obj.limit_info.month_received_score;
+                    $.info(`📊 本月已获得V力值更新为: ${month_received_score}`);
+                }
+            } catch (e) {
+                // 忽略更新错误
+            }
+        }
+    });
+}
+
+function getTaskHeaders() {
+    return {
+        'Cookie': txspCookie,
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+        'Referer': 'https://film.video.qq.com/x/grade/',
+        'Origin': 'https://film.video.qq.com',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9'
+    };
+}
+
+/**
+ * 最高3天会员抽奖
+ * @async
+ * @function mondayMemberTask
+ * @returns
+ */
+async function mondayMemberTask() {
+    $.info(`🎯 开始周一会员福利任务`);
+    
+    // 检查是否是周一
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0是周日，1是周一...
+    
+    if (dayOfWeek !== 1) {
+        $.info(`📅 今天不是周一，跳过周一会员福利任务`);
+        return;
+    }
+    
+    $.info(`🗓️ 今天是周一，开始执行会员福利任务`);
+    
+    try {
+        $.info(`\n🔄 执行周一抽奖任务...`);
+        const result = await participateMondayLottery();
+        
+        if (result.success) {
+            $.info(`🎉 获得: ${result.prizeName}`);
+            if (result.cdkey) {
+                $.info(`🔑 兑换码: ${result.cdkey}`);
+            }
+            if (result.prizeUrl) {
+                $.info(`🔗 兑换链接: ${result.prizeUrl}`);
+            }
+            $.taskInfo += `周一会员福利: 获得${result.prizeName}\n`;
+        } else {
+            if (result.errorCode === -904) {
+                $.info(`😞 很抱歉，您已经抽了没有资格再抽。`);
+            } else if (result.errorCode === -100) {
+                $.info(`😐 未中奖`);
+            } else {
+                $.info(`😞 ${result.error}`);
+            }
+        }
+        
+    } catch (e) {
+        $.error(`周一会员福利任务执行失败: ${e}`);
+    }
+}
+
+/**
+ * 固定最高3天会员抽奖
+ * @async
+ * @function participateMondayLottery
+ * @returns {Promise<Object>}
+ */
+async function participateMondayLottery() {
+    return new Promise((resolve) => {
+        const url = `https://activity.video.qq.com/fcgi-bin/asyn_activity?otype=xjson&type=100143&option=100&act_id=0gkj5i9qdgd2altp0g6oc4prie&module_id=qci3o55rdfqjju52yihlc6aeku`;
         
         let opt = {
             url: url,
             headers: {
                 'Cookie': txspCookie,
                 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-                'Referer': 'https://film.video.qq.com/x/grade/',
+                'Referer': 'https://film.video.qq.com/',
                 'Origin': 'https://film.video.qq.com',
-                'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'Accept-Language': 'zh-CN,zh;q=0.9'
             },
-            body: JSON.stringify({
-                "business_id": "1",
-                "task_id": watchVideoTask.task_id,
-                "phase_id": watchVideoTask.claimablePhase.phase_id
-            }),
             timeout: 15000
         };
         
-        $.post(opt, async (error, resp, data) => {
+        $.get(opt, (error, resp, data) => {
             try {
                 if (error) {
-                    $.error(`领取观看视频奖励网络错误: ${error}`);
-                    resolve();
+                    resolve({
+                        success: false,
+                        error: `网络错误: ${error}`,
+                        errorCode: -9999
+                    });
                     return;
                 }
                 
                 if (!data) {
-                    $.error(`领取观看视频奖励返回数据为空`);
-                    resolve();
+                    resolve({
+                        success: false,
+                        error: "服务器返回空数据",
+                        errorCode: -9998
+                    });
                     return;
                 }
                 
-                var obj = JSON.parse(data);
+                const obj = JSON.parse(data);
                 
-                if (obj.ret === 0) {
-                    let score = obj.score || 0;
-                    let totalScore = obj.total_score || 0;
-                    
-                    $.info(`   ✅ 领取成功！获得 ${score} V力值`);
-                    $.info(`   📊 当前总V力值: ${totalScore}`);
-                    
-                    // 更新月度统计
-                    if (month_received_score && !isNaN(month_received_score) && score && !isNaN(score)) {
-                        month_received_score = parseInt(month_received_score) + parseInt(score);
-                    }
-                    
-                    // 标记该阶段已完成
-                    watchVideoTask.claimablePhase.task_status = 1;
-                    watchVideoTask.claimable = false;
-                } else {
-                    $.warn(`   ❌ 领取失败: ${obj.msg || '未知错误'}`);
+                // 处理已抽过奖情况
+                if (obj.ret === -904) {
+                    resolve({
+                        success: false,
+                        error: obj.msg || "很抱歉，您已经抽了没有资格再抽。",
+                        errorCode: -904
+                    });
+                    return;
                 }
+                
+                // 处理未中奖情况
+                if (obj.ret === 0 && obj.lotter_result === -100) {
+                    resolve({
+                        success: false,
+                        error: "未中奖",
+                        errorCode: -100
+                    });
+                    return;
+                }
+                
+                // 成功中奖情况
+                if (obj.ret === 0 && obj.lotter_result === 1 && obj.prize_list && obj.prize_list.length > 0) {
+                    const prize = obj.prize_list[0];
+                    
+                    resolve({
+                        success: true,
+                        prizeName: prize.lotter_name || '未知奖品',
+                        cdkey: prize.cdkey || '',
+                        prizeUrl: prize.lotter_url_h5 || '',
+                        orderId: prize.orderId || '',
+                        propertyBaseType: prize.property_base_type,
+                        errorCode: 0
+                    });
+                } else {
+                    // 其他错误情况
+                    resolve({
+                        success: false,
+                        error: obj.msg || "抽奖失败",
+                        errorCode: obj.ret || -1
+                    });
+                }
+                
             } catch (e) {
-                $.error(`   ❌ 解析领取结果失败: ${e}`);
+                resolve({
+                    success: false,
+                    error: `数据解析失败`,
+                    errorCode: -9997
+                });
             }
-            resolve();
         });
     });
 }
 
-function getTaskStatusText(status) {
-    switch (status) {
-        case 0: return "未完成";
-        case 1: return "已完成";
-        case 2: return "进行中";
-        case 3: return "可领取";
-        default: return "未知";
-    }
-}
-
 function waitRandom(min, max) {
-    return new Promise((resolve) => {
-        let delay = Math.floor(Math.random() * (max - min + 1)) + min;
+    return new Promise(resolve => {
+        const delay = Math.floor(Math.random() * (max - min + 1)) + min;
         setTimeout(resolve, delay);
     });
 }
@@ -1013,53 +1380,42 @@ function safeGet(data) {
     try {
         return JSON.parse(data);
     } catch (e) {
-        return null;
+        $.error(e);
+        return false;
     }
 }
 
 function getCookie() {
-    if ($request.url.includes('trpc.new_task_system.task_system.TaskSystem/ReadTaskList')) {
-        if ($request.headers?.Cookie) {
+    if ($request.url.includes("ReadTaskList") || $request.url.includes("HotRankHttp")) {
+        if ($request.headers.Cookie) {
             txspCookie = $request.headers.Cookie;
-            $.setdata(txspCookie, 'txspCookie');
-            $.msg($.name, '获取txspCookie成功', '请禁用或移除主机名');
+            $.msg($.name, `获取txspCookie成功`, ``);
+            $.setdata(txspCookie, `txspCookie`);
         }
-    } else if ($request.url.includes('trpc.video_account_login.web_login_trpc.WebLoginTrpc/NewRefresh')) {
-        if ($request.headers?.cookie) {
-            txspRefreshCookie = $request.headers.cookie;
-            $.setdata(txspRefreshCookie, 'txspRefreshCookie');
+    } else if ($request.url.includes("NewRefresh")) {
+        if ($request.headers.Cookie) {
+            txspRefreshCookie = $request.headers.Cookie;
+            $.msg($.name, `获取txspRefreshCookie成功`, ``);
+            $.setdata(txspRefreshCookie, `txspRefreshCookie`);
         }
         if ($request.body) {
             txspRefreshBody = $request.body;
-            $.setdata(txspRefreshBody, 'txspRefreshBody');
-        }
-        if (txspRefreshCookie && txspRefreshBody) {
-            $.msg($.name, '获取txspRefreshCookie、txspRefreshBody成功', '请禁用或移除主机名');
+            $.msg($.name, `获取txspRefreshBody成功`, ``);
+            $.setdata(txspRefreshBody, `txspRefreshBody`);
         }
     }
 }
 
 async function SendMsg() {
-    if (Notify == 0) return;
-    if ($.isNode()) {
-        if ($.desc) {
-            await notify.sendNotify($.name, $.desc + "\n" + $.taskInfo);
+    if (Notify > 0) {
+        if ($.isNode()) {
+            await notify.sendNotify($.name, $.desc);
+        } else {
+            $.msg($.name, "", $.desc);
         }
-    } else {
-        $.msg($.name, "", $.desc + "\n" + $.taskInfo);
     }
 }
 
-async function waitRandom(min, max) {
-    var time = getRandomInt(min, max);
-    await $.wait(time);
-}
-
-function getRandomInt(min, max) {
-    min = Math.ceil(min);
-    max = Math.floor(max);
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
 
 // 精简版 Env 函数
 function Env(name, opts) {
