@@ -2,8 +2,8 @@
 *@file       腾讯视频
 *@desp       本脚本仅适用于腾讯视频会员每日签到，仅测试Quantumult X、青龙（只支持单账号）
 *@env        txspCookie、txspRefreshCookie、txspRefreshBody、isSkipTxspCheckIn
-*@updated    2025-11-5
-*@version    v1.0.7
+*@updated    2024-6-14
+*@version    v1.0.3
 
 🌟 环境变量说明
 txspCookie：腾讯视频app的Cookie
