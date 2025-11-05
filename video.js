@@ -2,8 +2,8 @@
 *@file       腾讯视频
 *@desp       本脚本仅适用于腾讯视频会员每日签到，仅测试Quantumult X、青龙（只支持单账号）
 *@env        txspCookie、txspRefreshCookie、txspRefreshBody、isSkipTxspCheckIn
-*@updated    2024-6-14
-*@version    v1.0.3
+*@updated    2025-11-5
+*@version    v1.0.7
 
 🌟 环境变量说明
 txspCookie：腾讯视频app的Cookie
@@ -71,13 +71,13 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 			$.warn(`未填写txspCookie环境变量`);
 			return;
 		}
-		$.info("---- 开始 刷新vusession ----");
+		$.info("---- 开始刷新vusession ----");
 		await refresh_vusession();
 		$.info(`--------- 结束 ---------\n`);
+        $.info(`---- 腾讯视频VIP信息 ----`);
 		$.info(`用户昵称：${nickname}`);
 		await getVipInfo();
 		if (isTxspVip){
-			$.info(`---- 腾讯视频VIP信息 ----`);
 			if (isTxspSvip){
 				$.info(`当前是腾讯视频SVIP`);
 			} else {
@@ -112,7 +112,7 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 					await waitRandom(1000, 2000);
 				} else if (isTxspCheckIn){
 					$.info(`\n🎫 签到任务:`);
-					$.info(`状态: ⏭️ 今天已签到，跳过`);
+					$.info(`状态: ✅ 今天已签到，跳过`);
 				} else if (month_received_score === month_limit){
 					$.info(`\n🎫 签到任务:`);
 					$.info(`状态: ⏭️ 本月已满${month_limit}V力值，跳过`);
@@ -124,13 +124,16 @@ if ((isGetCookie = typeof $request !== `undefined`)) {
 					
 					// 执行手机看视频任务 - 修复：移除重复的条件判断
 					if (watchVideoTask.hasRewardsToClaim) {
-						//$.info(`   开始执行手机看视频任务...`);
+						$.info(`状态: 🎯 可领取`);
 						await completeWatchVideoTask();
 						await waitRandom(1000, 2000);
 					} else {
-						$.info(`状态: 无奖励可领取`);
-						$.taskInfo += `手机看视频任务: 无奖励可领\n`;
-						$.info(`💡 提示: 请观看视频满足时长要求后再次执行`);
+						// 根据任务状态显示不同的提示信息
+						if (watchVideoTask.task_status === 1) {
+							$.info(`状态: ✅ 今天已完成，跳过`);
+						} else {
+							$.info(`状态: 📊 观看时长进行中`);
+						}
 					}
 				} else if (month_received_score === month_limit) {
 					$.info(`\n📱 手机看视频任务:`);
@@ -969,43 +972,31 @@ async function readTxspTaskList() {
 								isTxspCheckIn = false;
 							}
 							
-							// 查找手机看视频任务 - 简化显示逻辑
-							watchVideoTask = taskList.find(task => 
-								task.task_id === 215 || 
-								task.task_maintitle === "手机看视频" ||
-								task.title === "手机看视频"
-							);
-							
+							// 查找手机看视频任务 - 安全版本
+							watchVideoTask = null;
+							for (let task of taskList) {
+								if (task.task_id === 215 || task.task_maintitle === "手机看视频" || task.title === "手机看视频") {
+									watchVideoTask = task;
+									break;
+								}
+							}
+
 							if (watchVideoTask) {
-								// 简化的检测逻辑
-								let hasRewardsToClaim = false;
-								
-								// 方法1: 检查整体任务状态
+								// 直接根据整体任务状态判断
 								if (watchVideoTask.task_status === 3) {
-									hasRewardsToClaim = true;
-								}
-								// 方法2: 检查按钮描述
-								else if (watchVideoTask.task_button_desc === "领取") {
-									hasRewardsToClaim = true;
-								}
-								// 方法3: 检查阶段任务状态
-								else if (watchVideoTask.phase_tasks) {
-									for (let phase of watchVideoTask.phase_tasks) {
-										if (phase.task_status === 1 || phase.task_status === 3) {
-											hasRewardsToClaim = true;
-											break;
-										}
-									}
-								}
-								
-								watchVideoTask.hasRewardsToClaim = hasRewardsToClaim;
-								
-								if (hasRewardsToClaim) {
-									$.info(`手机看视频: 🎯 有奖励可领取`);
-								} else {
+									watchVideoTask.hasRewardsToClaim = true;
+									$.info(`手机看视频: 🎯 可领取`);
+								} else if (watchVideoTask.task_status === 1) {
+									// 状态1表示已完成，没有奖励可领取
+									watchVideoTask.hasRewardsToClaim = false;
 									$.info(`手机看视频: ✅ 已完成`);
+								} else if (watchVideoTask.task_status === 0) {
+									watchVideoTask.hasRewardsToClaim = false;
+									$.info(`手机看视频: ⏳ 未开始`);
+								} else {
+									watchVideoTask.hasRewardsToClaim = false;
+									$.info(`手机看视频: 📊 状态${watchVideoTask.task_status}`);
 								}
-								
 							} else {
 								$.warn(`未找到手机看视频任务`);
 							}
