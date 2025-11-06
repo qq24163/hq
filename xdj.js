@@ -5,7 +5,7 @@
 hostname = lm.api.sujh.net
 
 [rewrite_local]
-^https:\/\/lm\.api\.sujh\.net\/app\/score\/index url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/xdj.js
+^https:\/\/lm\.api\.sujh\.net\/app\/user\/index url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/xdj.js
 */
 // xdj.js - 捕获Authorization存储到XDJTOKEN
 (function() {
@@ -14,7 +14,7 @@ hostname = lm.api.sujh.net
     const url = $request.url;
     
     // 检查是否是目标URL
-    if (!url.includes('lm.api.sujh.net/app/score/index')) {
+    if (!url.includes('lm.api.sujh.net/app/user/index')) {
         $done({});
         return;
     }
