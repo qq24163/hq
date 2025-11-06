@@ -5,31 +5,68 @@
 hostname = lm.api.sujh.net
 
 [rewrite_local]
-^https:\/\/lm\.api\.sujh\.net\/app\/msgTemplate\/list url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/xdj.js
+^https:\/\/lm\.api\.sujh\.net\/app\/score\/index url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/xdj.js
 */
-// view-xdj.js - 查看XDJTOKEN数据
-try {
-    const current = $prefs.valueForKey('xdjtoken_current');
-    const allTokensStr = $prefs.valueForKey('XDJTOKEN') || '';
-    const allTokens = allTokensStr.split('&').filter(t => t);
+// xdj.js - 捕获Authorization存储到XDJTOKEN
+(function() {
+    'use strict';
     
-    let message = `总账号数: ${allTokens.length}\n\n`;
+    const url = $request.url;
     
-    allTokens.forEach((token, index) => {
-        message += `账号${index + 1}: ${token.substring(0, 25)}...\n\n`;
-    });
-    
-    if (current) {
-        message += `当前Token: ${current.substring(0, 30)}...`;
+    // 检查是否是目标URL
+    if (!url.includes('lm.api.sujh.net/app/score/index')) {
+        $done({});
+        return;
     }
     
-    $notify("📦 XDJTOKEN数据", "多账号&分隔", message);
+    try {
+        const headers = $request.headers;
+        const authorization = headers['Authorization'] || headers['authorization'];
+        
+        if (!authorization) {
+            console.log('[XDJTOKEN] 未找到Authorization头部');
+            $done({});
+            return;
+        }
+        
+        console.log(`[XDJTOKEN] 捕获到Authorization: ${authorization.substring(0, 20)}...`);
+        
+        // 保存到BoxJS
+        $prefs.setValueForKey(authorization, 'xdjtoken_current');
+        
+        // 多账号管理（&分隔）
+        const storedTokens = $prefs.valueForKey('XDJTOKEN') || '';
+        let tokensArray = storedTokens ? storedTokens.split('&').filter(t => t.trim() !== '') : [];
+        
+        const isNewToken = !tokensArray.includes(authorization);
+        
+        if (isNewToken) {
+            // 新token，添加到数组
+            if (tokensArray.length >= 10) {
+                tokensArray.shift(); // 移除最早的账号
+            }
+            tokensArray.push(authorization);
+            
+            // 保存用&分隔的字符串
+            const newTokensString = tokensArray.join('&');
+            $prefs.setValueForKey(newTokensString, 'XDJTOKEN');
+        }
+        
+        // 单条精简通知
+        $notify(
+            isNewToken ? "✅ 新XDJTOKEN" : "🔄 XDJTOKEN",
+            `账号数: ${tokensArray.length}`,
+            `Token: ${authorization.substring(0, 15)}...`
+        );
+        
+        // 自动复制当前token
+        if (typeof $tool !== 'undefined' && $tool.copy) {
+            $tool.copy(authorization);
+        }
+        
+    } catch (error) {
+        console.log(`[XDJTOKEN] 错误: ${error}`);
+    }
     
-    // 复制所有token（&分隔格式）
-    $tool.copy(allTokensStr);
-    
-} catch (e) {
-    $notify("❌ 数据读取失败", "", e.toString());
-}
-
-$done({});
+    $done({});
+})();
