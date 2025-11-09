@@ -55,9 +55,6 @@ hostname = api.digital4danone.com.cn
             console.log('[DNYSTOKEN] 无请求体数据');
         }
         
-        // 构建token组合
-        const tokenCombination = `${xAccessToken || ''}#${openId}#${unionId}`;
-        
         // 检查是否有有效数据
         if (!xAccessToken && !openId && !unionId) {
             console.log('[DNYSTOKEN] 未找到任何有效参数');
@@ -65,21 +62,34 @@ hostname = api.digital4danone.com.cn
             return;
         }
         
+        // 构建备注格式的组合
+        const tokenCombination = `#${xAccessToken || ''}#${openId}#${unionId}`;
+        
         console.log(`[DNYSTOKEN] 最终组合: ${tokenCombination}`);
         
         // 保存到BoxJS
         $prefs.setValueForKey(tokenCombination, 'dnystoken_current');
         
-        // 多账号管理
+        // 多账号管理（换行分隔）
         const storedTokens = $prefs.valueForKey('DNYSTOKEN') || '';
-        let tokensArray = storedTokens ? storedTokens.split('&').filter(t => t.trim() !== '') : [];
+        let tokensArray = storedTokens ? storedTokens.split('\n').filter(t => t.trim() !== '') : [];
         
         const isNewToken = !tokensArray.includes(tokenCombination);
         
         if (isNewToken) {
-            if (tokensArray.length >= 10) tokensArray.shift();
+            // 新token，添加到数组
+            if (tokensArray.length >= 10) {
+                tokensArray.shift(); // 移除最早的账号
+            }
             tokensArray.push(tokenCombination);
-            $prefs.setValueForKey(tokensArray.join('&'), 'DNYSTOKEN');
+            
+            // 保存用换行分隔的字符串，并添加序号备注
+            const numberedTokens = tokensArray.map((token, index) => {
+                return `${index + 1}${token}`;
+            });
+            
+            const newTokensString = numberedTokens.join('\n');
+            $prefs.setValueForKey(newTokensString, 'DNYSTOKEN');
         }
         
         // 单条通知
