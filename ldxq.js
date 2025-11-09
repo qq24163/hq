@@ -5,9 +5,9 @@
 hostname = lvdong.fzjingzhou.com
 
 [rewrite_local]
-^https:\/\/lvdong\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/cxktoken.js
+^https:\/\/lvdong\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/ldxq.js
 */
-// capture-ldxqtoken-session.js - 捕获getWxMiniProgramSessionKey接口
+// capture-ldxqtoken-session.js - 捕获getWxMiniProgramSessionKey接口的token
 const url = $request.url;
 
 if (url.includes('lvdong.fzjingzhou.com/api/login/getWxMiniProgramSessionKey') && $request.body) {
