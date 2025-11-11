@@ -1,9 +1,3 @@
-/**
- * Boxjs到青龙面板批量同步脚本（QX专用版）
- * 功能：从Boxjs读取配置，并将Boxjs中的Token数据同步到青龙面板
- * 注意：此脚本专为Quantumult X设计
- */
-
 // ==================== 从Boxjs读取配置 ====================
 function getQLConfigFromBoxjs() {
     const config = {
@@ -78,22 +72,11 @@ function checkQLConfig() {
 function qxHttpRequest(options) {
     return new Promise((resolve, reject) => {
         $task.fetch(options).then(response => {
-            // 检查HTTP状态码
-            if (response.statusCode !== 200) {
-                reject(new Error(`HTTP ${response.statusCode}: ${response.statusText || '请求失败'}`));
-                return;
-            }
-            
-            try {
-                const data = JSON.parse(response.body);
-                resolve({
-                    data: data,
-                    status: response.statusCode,
-                    headers: response.headers
-                });
-            } catch (e) {
-                reject(new Error('响应解析失败: ' + e.message));
-            }
+            resolve({
+                status: response.statusCode,
+                headers: response.headers,
+                body: response.body
+            });
         }, reason => {
             reject(new Error(reason.error || '网络请求失败'));
         });
@@ -105,18 +88,27 @@ async function testQLConnection() {
     try {
         console.log('🔗 测试青龙面板连接...');
         
-        // 测试基础连接
-        const testUrl = `${QL_CONFIG.url}/`;
-        console.log(`   测试地址: ${testUrl}`);
-        
         const testResponse = await qxHttpRequest({
-            url: testUrl,
+            url: QL_CONFIG.url,
             method: 'GET',
             timeout: 10000
         });
         
-        console.log('✅ 青龙面板连接正常');
-        return true;
+        // 检查是否返回HTML（说明连接成功但可能是登录页面）
+        if (testResponse.body.includes('<!DOCTYPE') || testResponse.body.includes('<html')) {
+            console.log('✅ 青龙面板连接正常（返回HTML页面）');
+            return true;
+        }
+        
+        // 尝试解析JSON
+        try {
+            const data = JSON.parse(testResponse.body);
+            console.log('✅ 青龙面板连接正常（返回JSON数据）');
+            return true;
+        } catch (e) {
+            console.log('✅ 青龙面板连接正常（返回其他格式数据）');
+            return true;
+        }
         
     } catch (error) {
         console.log(`❌ 青龙面板连接失败: ${error.message}`);
@@ -133,39 +125,57 @@ async function getQLToken() {
         const apiPaths = [
             '/open/auth/token',
             '/api/auth/token',
-            '/auth/token'
+            '/auth/token',
+            '/open/auth/token?client_id=' + QL_CONFIG.clientId + '&client_secret=' + QL_CONFIG.clientSecret
         ];
         
         for (const apiPath of apiPaths) {
             try {
                 console.log(`   尝试路径: ${apiPath}`);
                 
+                const requestUrl = apiPath.includes('?') ? 
+                    `${QL_CONFIG.url}${apiPath}` : 
+                    `${QL_CONFIG.url}${apiPath}`;
+                
+                const requestBody = apiPath.includes('?') ? 
+                    null : 
+                    JSON.stringify({
+                        client_id: QL_CONFIG.clientId,
+                        client_secret: QL_CONFIG.clientSecret
+                    });
+                
                 const tokenResp = await qxHttpRequest({
-                    url: `${QL_CONFIG.url}${apiPath}`,
+                    url: requestUrl,
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'User-Agent': 'QuantumultX'
                     },
-                    body: JSON.stringify({
-                        client_id: QL_CONFIG.clientId,
-                        client_secret: QL_CONFIG.clientSecret
-                    }),
+                    body: requestBody,
                     timeout: 10000
                 });
                 
-                if (tokenResp.data && tokenResp.data.code === 200) {
+                // 解析响应
+                let responseData;
+                try {
+                    responseData = JSON.parse(tokenResp.body);
+                } catch (e) {
+                    console.log(`❌ 路径 ${apiPath} 返回非JSON数据`);
+                    continue;
+                }
+                
+                if (responseData && responseData.code === 200) {
                     console.log(`✅ 令牌获取成功 (路径: ${apiPath})`);
-                    return tokenResp.data.data.token;
+                    return responseData.data.token;
                 } else {
-                    console.log(`❌ 路径 ${apiPath} 返回错误: ${tokenResp.data ? tokenResp.data.message : '未知错误'}`);
+                    console.log(`❌ 路径 ${apiPath} 返回错误: ${responseData ? responseData.message : '未知错误'}`);
                 }
             } catch (error) {
                 console.log(`❌ 路径 ${apiPath} 请求失败: ${error.message}`);
             }
         }
         
-        throw new Error('所有API路径都尝试失败');
+        throw new Error('所有API路径都尝试失败，请检查青龙面板版本和配置');
         
     } catch (error) {
         throw new Error(`获取令牌失败: ${error.message}`);
@@ -197,12 +207,19 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
             timeout: 10000
         });
         
-        if (envsResp.data.code !== 200) {
-            throw new Error(`获取环境变量列表失败: ${envsResp.data.message}`);
+        let envsData;
+        try {
+            envsData = JSON.parse(envsResp.body);
+        } catch (e) {
+            throw new Error('环境变量列表响应解析失败');
+        }
+        
+        if (envsData.code !== 200) {
+            throw new Error(`获取环境变量列表失败: ${envsData.message}`);
         }
         
         // 3. 查找是否已存在该变量
-        const existingEnv = envsResp.data.data.find(env => env.name === envName);
+        const existingEnv = envsData.data.find(env => env.name === envName);
         let result;
         
         if (existingEnv) {
@@ -211,7 +228,7 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
             console.log(`   旧值: ${existingEnv.value ? existingEnv.value.substring(0, 30) + '...' : '空值'}`);
             console.log(`   新值: ${envValue.substring(0, 30)}...`);
             
-            result = await qxHttpRequest({
+            const updateResp = await qxHttpRequest({
                 url: `${QL_CONFIG.url}/open/envs`,
                 method: 'PUT',
                 headers: {
@@ -227,12 +244,18 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
                 }),
                 timeout: 10000
             });
+            
+            try {
+                result = JSON.parse(updateResp.body);
+            } catch (e) {
+                throw new Error('更新响应解析失败');
+            }
         } else {
             // 创建新变量
             console.log(`🆕 创建新变量: ${envName}`);
             console.log(`   值: ${envValue.substring(0, 30)}...`);
             
-            result = await qxHttpRequest({
+            const createResp = await qxHttpRequest({
                 url: `${QL_CONFIG.url}/open/envs`,
                 method: 'POST',
                 headers: {
@@ -247,9 +270,15 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
                 }]),
                 timeout: 10000
             });
+            
+            try {
+                result = JSON.parse(createResp.body);
+            } catch (e) {
+                throw new Error('创建响应解析失败');
+            }
         }
         
-        if (result.data.code === 200) {
+        if (result.code === 200) {
             console.log(`✅ 环境变量 ${envName} 同步成功`);
             return {
                 success: true,
@@ -257,7 +286,7 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
                 envName: envName
             };
         } else {
-            throw new Error(`API返回错误: ${result.data.message}`);
+            throw new Error(`API返回错误: ${result.message}`);
         }
         
     } catch (error) {
