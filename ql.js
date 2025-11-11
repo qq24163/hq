@@ -1,9 +1,3 @@
-/**
- * Boxjs到青龙面板批量同步脚本
- * 使用删除重建方案，避免更新API的验证问题
- */
-
-// 配置
 const QL_CONFIG = {
     url: $prefs.valueForKey('ql_url') || 'http://127.0.0.1:5700',
     clientId: $prefs.valueForKey('ql_client_id') || 'tr8-rzVyCi6e',
@@ -23,7 +17,6 @@ function qxHttpRequest(options) {
         $task.fetch(options).then(response => {
             resolve({
                 status: response.statusCode,
-                headers: response.headers,
                 body: response.body
             });
         }, reason => {
@@ -38,8 +31,7 @@ async function getQLToken() {
     const tokenResp = await qxHttpRequest({
         url: tokenUrl,
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 10000
+        headers: { 'Content-Type': 'application/json' }
     });
     const responseData = JSON.parse(tokenResp.body);
     if (responseData.code === 200) {
@@ -97,7 +89,8 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
         if (existingEnv) {
             console.log(`   📝 删除并重新创建`);
             await deleteQLEnv(token, existingEnv.id);
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // 短暂延迟
+            await new Promise(resolve => setTimeout(resolve, 300));
         } else {
             console.log(`   🆕 创建新变量`);
         }
@@ -112,8 +105,8 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
     }
 }
 
-// 主函数
-async function main() {
+// 主执行函数
+(async () => {
     console.log('🚀 Boxjs到青龙面板同步开始\n');
     
     let successCount = 0;
@@ -134,6 +127,7 @@ async function main() {
                 errorCount++;
             }
             
+            // 延迟1秒（除了最后一个）
             if (totalCount < TOKEN_CONFIG.length) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
@@ -144,7 +138,7 @@ async function main() {
     }
     
     // 输出汇总报告
-    console.log(`\n📊 同步完成报告`);
+    //console.log(`\n📊 同步完成报告`);
     console.log(`总处理: ${totalCount} 个`);
     console.log(`✅ 成功: ${successCount} 个`);
     console.log(`⏭️ 跳过: ${skipCount} 个`);
@@ -154,17 +148,12 @@ async function main() {
     const notificationMessage = `成功:${successCount} 失败:${errorCount} 跳过:${skipCount}`;
     $notification.post('Boxjs同步完成', notificationMessage, `总处理: ${totalCount}个`);
     
-    console.log('✅ 脚本执行完毕 - 请查看推送通知');
-}
-
-// 执行并处理完成
-try {
-    await main();
-    console.log('🎉 所有任务完成！');
-} catch (error) {
+    console.log('✅ 脚本执行完毕');
+    
+    // 结束脚本
+    $done();
+})().catch(error => {
     console.log('❌ 脚本执行异常:', error);
     $notification.post('Boxjs同步失败', '执行异常', error.message);
-}
-
-// 明确结束脚本
-$done();
+    $done();
+});
