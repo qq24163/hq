@@ -1,9 +1,3 @@
-/**
- * Boxjs到青龙面板批量同步脚本（青龙2.17.12专用版）
- * 功能：从Boxjs读取配置，并将Boxjs中的Token数据同步到青龙面板
- * 注意：此脚本专为青龙面板2.17.12版本设计
- */
-
 // ==================== 从Boxjs读取配置 ====================
 function getQLConfigFromBoxjs() {
     const config = {
