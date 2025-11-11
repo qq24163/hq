@@ -1,3 +1,9 @@
+/**
+ * Boxjs到青龙面板批量同步脚本（QX专用版）
+ * 功能：从Boxjs读取配置，并将Boxjs中的Token数据同步到青龙面板
+ * 注意：此脚本专为Quantumult X设计
+ */
+
 // ==================== 从Boxjs读取配置 ====================
 function getQLConfigFromBoxjs() {
     const config = {
@@ -71,32 +77,99 @@ function checkQLConfig() {
 // ==================== QX专用HTTP请求函数 ====================
 function qxHttpRequest(options) {
     return new Promise((resolve, reject) => {
-        const method = options.method || 'GET';
-        const headers = options.headers || {};
-        const body = options.body || null;
-        
-        $task.fetch({
-            url: options.url,
-            method: method,
-            headers: headers,
-            body: body
-        }).then(response => {
+        $task.fetch(options).then(response => {
+            // 检查HTTP状态码
+            if (response.statusCode !== 200) {
+                reject(new Error(`HTTP ${response.statusCode}: ${response.statusText || '请求失败'}`));
+                return;
+            }
+            
             try {
                 const data = JSON.parse(response.body);
                 resolve({
                     data: data,
-                    status: response.statusCode
+                    status: response.statusCode,
+                    headers: response.headers
                 });
             } catch (e) {
-                resolve({
-                    data: response.body,
-                    status: response.statusCode
-                });
+                reject(new Error('响应解析失败: ' + e.message));
             }
         }, reason => {
             reject(new Error(reason.error || '网络请求失败'));
         });
     });
+}
+
+// ==================== 测试青龙面板连接 ====================
+async function testQLConnection() {
+    try {
+        console.log('🔗 测试青龙面板连接...');
+        
+        // 测试基础连接
+        const testUrl = `${QL_CONFIG.url}/`;
+        console.log(`   测试地址: ${testUrl}`);
+        
+        const testResponse = await qxHttpRequest({
+            url: testUrl,
+            method: 'GET',
+            timeout: 10000
+        });
+        
+        console.log('✅ 青龙面板连接正常');
+        return true;
+        
+    } catch (error) {
+        console.log(`❌ 青龙面板连接失败: ${error.message}`);
+        return false;
+    }
+}
+
+// ==================== 获取青龙面板Token ====================
+async function getQLToken() {
+    try {
+        console.log('🔑 获取青龙面板访问令牌...');
+        
+        // 尝试不同的API路径
+        const apiPaths = [
+            '/open/auth/token',
+            '/api/auth/token',
+            '/auth/token'
+        ];
+        
+        for (const apiPath of apiPaths) {
+            try {
+                console.log(`   尝试路径: ${apiPath}`);
+                
+                const tokenResp = await qxHttpRequest({
+                    url: `${QL_CONFIG.url}${apiPath}`,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'QuantumultX'
+                    },
+                    body: JSON.stringify({
+                        client_id: QL_CONFIG.clientId,
+                        client_secret: QL_CONFIG.clientSecret
+                    }),
+                    timeout: 10000
+                });
+                
+                if (tokenResp.data && tokenResp.data.code === 200) {
+                    console.log(`✅ 令牌获取成功 (路径: ${apiPath})`);
+                    return tokenResp.data.data.token;
+                } else {
+                    console.log(`❌ 路径 ${apiPath} 返回错误: ${tokenResp.data ? tokenResp.data.message : '未知错误'}`);
+                }
+            } catch (error) {
+                console.log(`❌ 路径 ${apiPath} 请求失败: ${error.message}`);
+            }
+        }
+        
+        throw new Error('所有API路径都尝试失败');
+        
+    } catch (error) {
+        throw new Error(`获取令牌失败: ${error.message}`);
+    }
 }
 
 // ==================== 核心同步函数 ====================
@@ -106,28 +179,11 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
         
         // 检查配置是否完整
         if (!QL_CONFIG.url || !QL_CONFIG.clientId || !QL_CONFIG.clientSecret) {
-            throw new Error('青龙面板配置不完整，请在Boxjs中设置ql_url、ql_client_id、ql_client_secret');
+            throw new Error('青龙面板配置不完整');
         }
         
         // 1. 获取访问令牌
-        const tokenResp = await qxHttpRequest({
-            url: `${QL_CONFIG.url}/open/auth/token`,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                client_id: QL_CONFIG.clientId,
-                client_secret: QL_CONFIG.clientSecret
-            })
-        });
-        
-        if (tokenResp.data.code !== 200) {
-            throw new Error(`获取token失败: ${tokenResp.data.message}`);
-        }
-        
-        const token = tokenResp.data.data.token;
-        console.log(`✅ 获取青龙API令牌成功`);
+        const token = await getQLToken();
         
         // 2. 获取现有环境变量列表
         const envsResp = await qxHttpRequest({
@@ -135,8 +191,10 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
+                'Content-Type': 'application/json',
+                'User-Agent': 'QuantumultX'
+            },
+            timeout: 10000
         });
         
         if (envsResp.data.code !== 200) {
@@ -158,14 +216,16 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'QuantumultX'
                 },
                 body: JSON.stringify({
                     name: envName,
                     value: envValue,
                     _id: existingEnv._id,
                     remarks: remarks
-                })
+                }),
+                timeout: 10000
             });
         } else {
             // 创建新变量
@@ -177,13 +237,15 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'QuantumultX'
                 },
                 body: JSON.stringify([{
                     name: envName,
                     value: envValue,
                     remarks: remarks
-                }])
+                }]),
+                timeout: 10000
             });
         }
         
@@ -199,7 +261,7 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
         }
         
     } catch (error) {
-        console.log(`❌ 同步 ${envName} 失败: ${error}`);
+        console.log(`❌ 同步 ${envName} 失败: ${error.message}`);
         return {
             success: false,
             envName: envName,
@@ -263,6 +325,21 @@ async function batchSyncFromBoxjs() {
     console.log(`   地址: ${QL_CONFIG.url}`);
     console.log('⏰ 开始时间:', new Date().toLocaleString());
     console.log('='.repeat(60));
+    
+    // 测试连接
+    const connectionTest = await testQLConnection();
+    if (!connectionTest) {
+        console.log('❌ 无法连接到青龙面板，停止同步');
+        $notification.post('连接失败', '无法连接到青龙面板', '请检查地址和网络');
+        return {
+            total: 0,
+            success: 0,
+            skipped: 0,
+            error: 0,
+            details: [],
+            connectionError: true
+        };
+    }
     
     // 1. 检查Boxjs数据
     const boxjsData = checkBoxjsData();
@@ -376,12 +453,15 @@ async function batchSyncFromBoxjs() {
 // ==================== 执行函数 ====================
 async function main() {
     try {
+        console.log('📦 Boxjs到青龙面板同步脚本启动...');
+        
         // 显示当前配置状态
         console.log('🔍 当前配置状态:');
         const configCheck = checkQLConfig();
         
         if (!configCheck) {
             console.log('❌ 配置不完整，无法执行同步');
+            $notification.post('配置错误', '缺少青龙面板配置', '请在Boxjs中设置相关变量');
             return;
         }
         
@@ -390,11 +470,11 @@ async function main() {
         
         // 如果有失败的情况，建议重试
         if (result.error > 0 && !result.configError) {
-            console.log('\n💡 提示: 有同步失败的变量，建议检查:');
-            console.log('1. 青龙面板地址是否正确');
-            console.log('2. Client ID和Secret是否正确');
-            console.log('3. 网络是否连通');
-            console.log('4. 青龙面板是否正常运行');
+            console.log('\n💡 诊断建议:');
+            console.log('1. 检查青龙面板地址是否正确');
+            console.log('2. 确认Client ID和Secret是否正确');
+            console.log('3. 确认青龙面板版本和API路径');
+            console.log('4. 检查网络连接是否正常');
         }
         
     } catch (error) {
@@ -406,6 +486,3 @@ async function main() {
 // ==================== 启动脚本 ====================
 // 立即执行主函数
 main();
-
-console.log('📦 Boxjs到青龙面板同步脚本已加载（QX专用版）');
-console.log('✅ 脚本启动成功，开始同步流程...');
