@@ -5,7 +5,7 @@
 hostname = n05.sentezhenxuan.com
 
 [rewrite_local]
-^https?:\/\/n05\.sentezhenxuan\.com\/api\/user url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsgtoken.js
+^https?:\/\/n05\.sentezhenxuan\.com\/api\/user url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsg.js
 */
 // capture-sxsgtoken.js - 捕获Authorization和UID并格式化存储
 (function() {
