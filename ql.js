@@ -1,3 +1,9 @@
+/**
+ * Boxjs到青龙面板批量同步脚本（青龙2.17.12专用版）
+ * 功能：从Boxjs读取配置，并将Boxjs中的Token数据同步到青龙面板
+ * 注意：此脚本专为青龙面板2.17.12版本设计
+ */
+
 // ==================== 从Boxjs读取配置 ====================
 function getQLConfigFromBoxjs() {
     const config = {
@@ -17,7 +23,7 @@ function getQLConfigFromBoxjs() {
 // ==================== 配置区域 ====================
 const QL_CONFIG = getQLConfigFromBoxjs();
 
-// 需要同步的Token映射配置 - 根据你的Boxjs数据调整
+// 需要同步的Token映射配置
 const TOKEN_CONFIG = [
     {
         boxjsKey: 'aliyunWeb_data',
@@ -94,13 +100,11 @@ async function testQLConnection() {
             timeout: 10000
         });
         
-        // 检查是否返回HTML（说明连接成功但可能是登录页面）
         if (testResponse.body.includes('<!DOCTYPE') || testResponse.body.includes('<html')) {
             console.log('✅ 青龙面板连接正常（返回HTML页面）');
             return true;
         }
         
-        // 尝试解析JSON
         try {
             const data = JSON.parse(testResponse.body);
             console.log('✅ 青龙面板连接正常（返回JSON数据）');
@@ -116,70 +120,78 @@ async function testQLConnection() {
     }
 }
 
-// ==================== 获取青龙面板Token ====================
+// ==================== 获取青龙面板Token（2.17.12版本） ====================
 async function getQLToken() {
     try {
         console.log('🔑 获取青龙面板访问令牌...');
         
-        // 尝试不同的API路径
-        const apiPaths = [
-            '/open/auth/token',
-            '/api/auth/token',
-            '/auth/token',
-            '/open/auth/token?client_id=' + QL_CONFIG.clientId + '&client_secret=' + QL_CONFIG.clientSecret
-        ];
+        // 青龙2.17.12版本使用旧版认证方式
+        const authString = `${QL_CONFIG.clientId}|${QL_CONFIG.clientSecret}`;
+        const base64Auth = btoa(authString);
         
-        for (const apiPath of apiPaths) {
-            try {
-                console.log(`   尝试路径: ${apiPath}`);
-                
-                const requestUrl = apiPath.includes('?') ? 
-                    `${QL_CONFIG.url}${apiPath}` : 
-                    `${QL_CONFIG.url}${apiPath}`;
-                
-                const requestBody = apiPath.includes('?') ? 
-                    null : 
-                    JSON.stringify({
-                        client_id: QL_CONFIG.clientId,
-                        client_secret: QL_CONFIG.clientSecret
-                    });
-                
-                const tokenResp = await qxHttpRequest({
-                    url: requestUrl,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'QuantumultX'
-                    },
-                    body: requestBody,
-                    timeout: 10000
-                });
-                
-                // 解析响应
-                let responseData;
-                try {
-                    responseData = JSON.parse(tokenResp.body);
-                } catch (e) {
-                    console.log(`❌ 路径 ${apiPath} 返回非JSON数据`);
-                    continue;
-                }
-                
-                if (responseData && responseData.code === 200) {
-                    console.log(`✅ 令牌获取成功 (路径: ${apiPath})`);
-                    return responseData.data.token;
-                } else {
-                    console.log(`❌ 路径 ${apiPath} 返回错误: ${responseData ? responseData.message : '未知错误'}`);
-                }
-            } catch (error) {
-                console.log(`❌ 路径 ${apiPath} 请求失败: ${error.message}`);
-            }
+        console.log(`   使用基础认证: ${QL_CONFIG.clientId}|***`);
+        
+        const tokenResp = await qxHttpRequest({
+            url: `${QL_CONFIG.url}/open/auth/token`,
+            method: 'GET',
+            headers: {
+                'Authorization': `Basic ${base64Auth}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'QuantumultX'
+            },
+            timeout: 10000
+        });
+        
+        // 解析响应
+        let responseData;
+        try {
+            responseData = JSON.parse(tokenResp.body);
+        } catch (e) {
+            throw new Error('令牌响应解析失败: ' + e.message);
         }
         
-        throw new Error('所有API路径都尝试失败，请检查青龙面板版本和配置');
+        if (responseData && responseData.code === 200) {
+            console.log('✅ 令牌获取成功');
+            return responseData.data.token;
+        } else {
+            throw new Error(`令牌获取失败: ${responseData ? responseData.message : '未知错误'}`);
+        }
         
     } catch (error) {
         throw new Error(`获取令牌失败: ${error.message}`);
     }
+}
+
+// ==================== Base64编码函数 ====================
+function btoa(str) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    let output = '';
+    let i = 0;
+    
+    do {
+        const a = str.charCodeAt(i++);
+        const b = str.charCodeAt(i++);
+        const c = str.charCodeAt(i++);
+        
+        const bits = (a << 16) | (b << 8) | c;
+        
+        const o1 = (bits >> 18) & 0x3F;
+        const o2 = (bits >> 12) & 0x3F;
+        const o3 = (bits >> 6) & 0x3F;
+        const o4 = bits & 0x3F;
+        
+        output += chars.charAt(o1) + chars.charAt(o2) + chars.charAt(o3) + chars.charAt(o4);
+    } while (i < str.length);
+    
+    // 处理填充
+    const mod = str.length % 3;
+    if (mod === 1) {
+        output = output.slice(0, -2) + '==';
+    } else if (mod === 2) {
+        output = output.slice(0, -1) + '=';
+    }
+    
+    return output;
 }
 
 // ==================== 核心同步函数 ====================
@@ -482,7 +494,7 @@ async function batchSyncFromBoxjs() {
 // ==================== 执行函数 ====================
 async function main() {
     try {
-        console.log('📦 Boxjs到青龙面板同步脚本启动...');
+        console.log('📦 Boxjs到青龙面板同步脚本启动（青龙2.17.12专用）...');
         
         // 显示当前配置状态
         console.log('🔍 当前配置状态:');
@@ -500,10 +512,9 @@ async function main() {
         // 如果有失败的情况，建议重试
         if (result.error > 0 && !result.configError) {
             console.log('\n💡 诊断建议:');
-            console.log('1. 检查青龙面板地址是否正确');
-            console.log('2. 确认Client ID和Secret是否正确');
-            console.log('3. 确认青龙面板版本和API路径');
-            console.log('4. 检查网络连接是否正常');
+            console.log('1. 检查Client ID和Secret是否正确');
+            console.log('2. 确认青龙面板2.17.12版本是否支持此API');
+            console.log('3. 检查青龙面板日志查看详细错误');
         }
         
     } catch (error) {
