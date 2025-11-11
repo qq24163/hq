@@ -1,3 +1,9 @@
+/**
+ * Boxjs到青龙面板批量同步脚本
+ * 使用删除重建方案，避免更新API的验证问题
+ */
+
+// 配置
 const QL_CONFIG = {
     url: $prefs.valueForKey('ql_url') || 'http://127.0.0.1:5700',
     clientId: $prefs.valueForKey('ql_client_id') || 'tr8-rzVyCi6e',
@@ -106,7 +112,7 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
 }
 
 // 主执行函数
-(async () => {
+function main() {
     console.log('🚀 Boxjs到青龙面板同步开始\n');
     
     let successCount = 0;
@@ -114,46 +120,54 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
     let errorCount = 0;
     let totalCount = 0;
     
-    for (const config of TOKEN_CONFIG) {
-        const value = $prefs.valueForKey(config.boxjsKey);
-        if (value) {
-            totalCount++;
-            console.log(`📦 ${config.qlEnvName} (${value.length}字符)`);
-            
-            const success = await syncToQL(config.qlEnvName, value, config.remarks);
-            if (success) {
-                successCount++;
+    // 使用Promise链来处理异步
+    let promise = Promise.resolve();
+    
+    TOKEN_CONFIG.forEach(config => {
+        promise = promise.then(async () => {
+            const value = $prefs.valueForKey(config.boxjsKey);
+            if (value) {
+                totalCount++;
+                console.log(`📦 ${config.qlEnvName} (${value.length}字符)`);
+                
+                const success = await syncToQL(config.qlEnvName, value, config.remarks);
+                if (success) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+                
+                // 延迟1秒（除了最后一个）
+                if (totalCount < TOKEN_CONFIG.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             } else {
-                errorCount++;
+                skipCount++;
+                console.log(`⏭️ 跳过 ${config.qlEnvName}: Boxjs中无数据`);
             }
-            
-            // 延迟1秒（除了最后一个）
-            if (totalCount < TOKEN_CONFIG.length) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        } else {
-            skipCount++;
-            console.log(`⏭️ 跳过 ${config.qlEnvName}: Boxjs中无数据`);
-        }
-    }
+        });
+    });
     
-    // 输出汇总报告
-    //console.log(`\n📊 同步完成报告`);
-    console.log(`总处理: ${totalCount} 个`);
-    console.log(`✅ 成功: ${successCount} 个`);
-    console.log(`⏭️ 跳过: ${skipCount} 个`);
-    console.log(`❌ 失败: ${errorCount} 个`);
-    
-    // 发送推送通知
-    const notificationMessage = `成功:${successCount} 失败:${errorCount} 跳过:${skipCount}`;
-    $notification.post('Boxjs同步完成', notificationMessage, `总处理: ${totalCount}个`);
-    
-    console.log('✅ 脚本执行完毕');
-    
-    // 结束脚本
-    $done();
-})().catch(error => {
-    console.log('❌ 脚本执行异常:', error);
-    $notification.post('Boxjs同步失败', '执行异常', error.message);
-    $done();
-});
+    promise.then(() => {
+        // 输出汇总报告
+        console.log(`\n📊 同步完成报告`);
+        console.log(`总处理: ${totalCount} 个`);
+        console.log(`✅ 成功: ${successCount} 个`);
+        console.log(`⏭️ 跳过: ${skipCount} 个`);
+        console.log(`❌ 失败: ${errorCount} 个`);
+        
+        // 发送推送通知
+        const notificationMessage = `成功:${successCount} 失败:${errorCount} 跳过:${skipCount}`;
+        $notification.post('Boxjs同步完成', notificationMessage, `总处理: ${totalCount}个`);
+        
+        console.log('✅ 脚本执行完毕');
+        $done();
+    }).catch(error => {
+        console.log('❌ 脚本执行异常:', error);
+        $notification.post('Boxjs同步失败', '执行异常', error.message);
+        $done();
+    });
+}
+
+// 启动脚本
+main();
