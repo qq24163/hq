@@ -5,78 +5,105 @@
 hostname = n05.sentezhenxuan.com
 
 [rewrite_local]
-^https:\/\/n05\.sentezhenxuan\.com\/api\/user url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsgtoken.js
+^https?:\/\/n05\.sentezhenxuan\.com\/api\/user url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsgtoken.js
 */
 
-// capture-sxsgtoken.js - 捕获Authorization并格式化为序号格式
-(function() {
-    'use strict';
-    
-    const url = $request.url;
-    
-    // 检查是否是目标URL
-    if (!url.includes('n05.sentezhenxuan.com/api/user')) {
-        $done({});
-        return;
-    }
-    
+const SXSGTOKEN = "SXSGTOKEN";
+let isDuplicate = false;
+
+// 获取请求头中的Authorization
+const authHeader = $request.headers['Authorization'] || $request.headers['authorization'];
+if (!authHeader) {
+  $done({});
+}
+
+// 解析响应体
+const response = JSON.parse($response.body);
+if (!response.data || !response.data.nickname) {
+  $done({});
+}
+
+const nickname = response.data.nickname;
+const tokenData = `${nickname}#${authHeader}`;
+
+// 从BoxJS读取现有数据
+const boxjs_url = $prefs.valueForKey("boxjs_url") || "http://boxjs.com";
+const storageKey = `@${SXSGTOKEN}`;
+
+$prefs.setValueForKey(tokenData, storageKey + "_temp");
+
+// 获取BoxJS中存储的数据
+$task.fetch({
+  url: `${boxjs_url}/query/${storageKey}`,
+  method: "GET"
+}).then(response => {
+  let existingData = "";
+  if (response.statusCode === 200) {
     try {
-        const headers = $request.headers;
-        const authorization = headers['Authori-zation'] || headers['Authorization'] || headers['authorization'];
-        
-        if (!authorization) {
-            console.log('[SXSGTOKEN] 未找到Authorization头部');
-            $done({});
-            return;
-        }
-        
-        console.log(`[SXSGTOKEN] 捕获到Authorization: ${authorization.substring(0, 20)}...`);
-        
-        // 保存到BoxJS
-        $prefs.setValueForKey(authorization, 'sxsgtoken_current');
-        
-        // 多账号管理（换行分隔）
-        const storedTokens = $prefs.valueForKey('SXSGTOKEN') || '';
-        let tokensArray = storedTokens ? storedTokens.split('\n').filter(t => t.trim() !== '') : [];
-        
-        // 移除可能存在的旧序号
-        const cleanTokens = tokensArray.map(token => {
-            return token.replace(/^\d+#/, '');
-        });
-        
-        const isNewToken = !cleanTokens.includes(authorization);
-        
-        if (isNewToken) {
-            // 新token，添加到数组
-            if (cleanTokens.length >= 10) {
-                cleanTokens.shift(); // 移除最早的账号
-            }
-            cleanTokens.push(authorization);
-            
-            // 添加序号并保存用换行分隔的字符串
-            const numberedTokens = cleanTokens.map((token, index) => {
-                return `${index + 1}#${token}`;
-            });
-            
-            const newTokensString = numberedTokens.join('\n');
-            $prefs.setValueForKey(newTokensString, 'SXSGTOKEN');
-        }
-        
-        // 单条精简通知
-        $notify(
-            isNewToken ? "✅ 新SXSGTOKEN" : "🔄 SXSGTOKEN",
-            `账号数: ${cleanTokens.length}`,
-            `Token: ${authorization.substring(0, 15)}...`
-        );
-        
-        // 自动复制当前token
-        if (typeof $tool !== 'undefined' && $tool.copy) {
-            $tool.copy(authorization);
-        }
-        
-    } catch (error) {
-        console.log(`[SXSGTOKEN] 错误: ${error}`);
+      const result = JSON.parse(response.body);
+      if (result.ret === 0 && result.data) {
+        existingData = result.data;
+      }
+    } catch (e) {
+      console.log("解析BoxJS数据失败");
+    }
+  }
+  
+  return processData(existingData, tokenData, nickname);
+}).then(finalData => {
+  // 存储到BoxJS
+  return $task.fetch({
+    url: `${boxjs_url}/write/${storageKey}`,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      data: finalData
+    })
+  });
+}).then(response => {
+  if (response.statusCode === 200) {
+    if (isDuplicate) {
+      $notify("SXSGTOKEN", "⚠️ 账号数据重复", `账号 ${nickname} 已存在，已更新Token`);
+    } else {
+      $notify("SXSGTOKEN", "✅ 账号数据保存成功", `账号 ${nickname} 的Token已保存`);
+    }
+  }
+  $done({});
+}).catch(error => {
+  console.log("处理失败: " + error);
+  $done({});
+});
+
+function processData(existingData, newData, currentNickname) {
+  return new Promise((resolve) => {
+    if (!existingData) {
+      resolve(newData);
+      return;
     }
     
-    $done({});
-})();
+    const lines = existingData.split('\n');
+    const newLines = [];
+    let found = false;
+    
+    for (const line of lines) {
+      if (line.trim()) {
+        const [existingNickname] = line.split('#');
+        if (existingNickname === currentNickname) {
+          newLines.push(newData);
+          found = true;
+          isDuplicate = true;
+        } else {
+          newLines.push(line);
+        }
+      }
+    }
+    
+    if (!found) {
+      newLines.push(newData);
+    }
+    
+    resolve(newLines.join('\n'));
+  });
+}
