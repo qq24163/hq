@@ -8,38 +8,75 @@ hostname = n05.sentezhenxuan.com
 ^https:\/\/n05\.sentezhenxuan\.com\/api\/user url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsgtoken.js
 */
 
-// capture-sxsgtoken-simple.js - 保留Bearer前缀版本
-const url = $request.url;
-
-if (url.includes('n05.sentezhenxuan.com/api/user')) {
+// capture-sxsgtoken.js - 捕获Authorization并格式化为序号格式
+(function() {
+    'use strict';
+    
+    const url = $request.url;
+    
+    // 检查是否是目标URL
+    if (!url.includes('n05.sentezhenxuan.com/api/user')) {
+        $done({});
+        return;
+    }
+    
     try {
         const headers = $request.headers;
-        let auth = headers['Authori-zation'] || headers['Authorization'];
+        const authorization = headers['Authori-zation'] || headers['Authorization'] || headers['authorization'];
         
-        if (auth) {
-            // 直接保存完整的Authorization头（包含Bearer前缀）
-            $prefs.setValueForKey(auth, 'sxsgtoken_current');
-            
-            // 多账号管理
-            let allTokens = ($prefs.valueForKey('SXSGTOKEN') || '').split('&').filter(t => t);
-            if (!allTokens.includes(auth)) {
-                if (allTokens.length >= 10) allTokens.shift();
-                allTokens.push(auth);
-                $prefs.setValueForKey(allTokens.join('&'), 'SXSGTOKEN');
-            }
-            
-            // 单条通知
-            $notify(
-                '📱 SXSGTOKEN',
-                `账号${allTokens.length}个`,
-                auth.substring(0, 25) + '...'
-            );
-            
-            $tool.copy(auth);
+        if (!authorization) {
+            console.log('[SXSGTOKEN] 未找到Authorization头部');
+            $done({});
+            return;
         }
-    } catch (e) {
-        console.log('[SXSGTOKEN Error] ' + e);
+        
+        console.log(`[SXSGTOKEN] 捕获到Authorization: ${authorization.substring(0, 20)}...`);
+        
+        // 保存到BoxJS
+        $prefs.setValueForKey(authorization, 'sxsgtoken_current');
+        
+        // 多账号管理（换行分隔）
+        const storedTokens = $prefs.valueForKey('SXSGTOKEN') || '';
+        let tokensArray = storedTokens ? storedTokens.split('\n').filter(t => t.trim() !== '') : [];
+        
+        // 移除可能存在的旧序号
+        const cleanTokens = tokensArray.map(token => {
+            return token.replace(/^\d+#/, '');
+        });
+        
+        const isNewToken = !cleanTokens.includes(authorization);
+        
+        if (isNewToken) {
+            // 新token，添加到数组
+            if (cleanTokens.length >= 10) {
+                cleanTokens.shift(); // 移除最早的账号
+            }
+            cleanTokens.push(authorization);
+            
+            // 添加序号并保存用换行分隔的字符串
+            const numberedTokens = cleanTokens.map((token, index) => {
+                return `${index + 1}#${token}`;
+            });
+            
+            const newTokensString = numberedTokens.join('\n');
+            $prefs.setValueForKey(newTokensString, 'SXSGTOKEN');
+        }
+        
+        // 单条精简通知
+        $notify(
+            isNewToken ? "✅ 新SXSGTOKEN" : "🔄 SXSGTOKEN",
+            `账号数: ${cleanTokens.length}`,
+            `Token: ${authorization.substring(0, 15)}...`
+        );
+        
+        // 自动复制当前token
+        if (typeof $tool !== 'undefined' && $tool.copy) {
+            $tool.copy(authorization);
+        }
+        
+    } catch (error) {
+        console.log(`[SXSGTOKEN] 错误: ${error}`);
     }
-}
-
-$done({});
+    
+    $done({});
+})();
