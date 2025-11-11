@@ -1,3 +1,9 @@
+/**
+ * Boxjs到青龙面板批量同步脚本
+ * 使用删除重建方案，避免更新API的验证问题
+ */
+
+// 配置
 const QL_CONFIG = {
     url: $prefs.valueForKey('ql_url') || 'http://127.0.0.1:5700',
     clientId: $prefs.valueForKey('ql_client_id') || 'tr8-rzVyCi6e',
@@ -11,6 +17,7 @@ const TOKEN_CONFIG = [
     { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛会员俱乐部从Boxjs同步' }
 ];
 
+// HTTP请求函数
 function qxHttpRequest(options) {
     return new Promise((resolve, reject) => {
         $task.fetch(options).then(response => {
@@ -25,6 +32,7 @@ function qxHttpRequest(options) {
     });
 }
 
+// 获取青龙面板Token
 async function getQLToken() {
     const tokenUrl = `${QL_CONFIG.url}/open/auth/token?client_id=${QL_CONFIG.clientId}&client_secret=${QL_CONFIG.clientSecret}`;
     const tokenResp = await qxHttpRequest({
