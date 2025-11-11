@@ -1,7 +1,6 @@
 /**
  * Boxjs到青龙面板批量同步脚本（从Boxjs读取配置版）
  * 功能：从Boxjs读取配置，并将Boxjs中的Token数据同步到青龙面板
- * 作者：AI助手
  * 版本：2.0
  */
 
@@ -27,27 +26,21 @@ const QL_CONFIG = getQLConfigFromBoxjs();
 // 需要同步的Token映射配置
 const TOKEN_CONFIG = [
     {
-        boxjsKey: 'tx_token',
-        qlEnvName: 'TXTOKEN',
-        remarks: '腾讯Token从Boxjs同步',
+        boxjsKey: 'aliyunWeb_data',
+        qlEnvName: 'aliyunWeb_data',
+        remarks: '阿里云Token从Boxjs同步',
         required: true
     },
     {
-        boxjsKey: 'op_token', 
-        qlEnvName: 'OPTOKEN',
-        remarks: 'OPToken从Boxjs同步',
+        boxjsKey: 'IQOO', 
+        qlEnvName: 'IQOO',
+        remarks: 'IQOO从Boxjs同步',
         required: true
     },
     {
-        boxjsKey: 'ui_token',
-        qlEnvName: 'UITOKEN', 
-        remarks: 'UIToken从Boxjs同步',
-        required: true
-    },
-    {
-        boxjsKey: 'jd_cookie',
-        qlEnvName: 'JD_COOKIE',
-        remarks: '京东Cookie从Boxjs同步',
+        boxjsKey: 'RedBull',
+        qlEnvName: 'RedBull',
+        remarks: '红牛俱乐部从Boxjs同步',
         required: false
     }
     // 可以继续添加其他需要同步的Token
