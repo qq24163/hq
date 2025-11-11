@@ -5,7 +5,7 @@
 hostname = n05.sentezhenxuan.com
 
 [rewrite_local]
-^https?://n05\.sentezhenxuan\.com/api/user url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yyzx.js
+^https?://n05\.sentezhenxuan\.com/api/goods_details_user url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yyzx.js
 */
 // capture-sxsgtoken.js - 捕获Authorization和UID并格式化为YYZX格式
 (function() {
@@ -13,8 +13,8 @@ hostname = n05.sentezhenxuan.com
     
     const url = $request.url;
     
-    // 检查是否是目标URL
-    if (!url.includes('n05.sentezhenxuan.com/api/user')) {
+    // 检查是否是目标URL - 更新为新的接口
+    if (!url.includes('n05.sentezhenxuan.com/api/goods_details_user')) {
         $done({});
         return;
     }
@@ -62,11 +62,11 @@ hostname = n05.sentezhenxuan.com
                 }
             }
             
-            // 提取UID
-            const uid = body.uid || body.data?.uid;
+            // 提取UID - 根据实际响应结构调整
+            const uid = body.uid || body.data?.uid || body.user?.uid;
             
             if (!uid) {
-                console.log('[YYZX] 未找到UID字段');
+                console.log('[YYZX] 未找到UID字段，响应体:', JSON.stringify(body).substring(0, 200));
                 $done({});
                 return;
             }
