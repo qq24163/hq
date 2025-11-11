@@ -5,123 +5,76 @@
 hostname = n05.sentezhenxuan.com
 
 [rewrite_local]
-^https?://n05\.sentezhenxuan\.com/api/goods_details_user url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yyzx.js
+^https:\/\/n05\.sentezhenxuan\.com\/api\/user url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yyzx.js
 */
-// capture-sxsgtoken.js - 捕获Authorization和UID并格式化为YYZX格式
+// capture-sxsgtoken.js - 捕获Authorization并格式化为序号格式
 (function() {
     'use strict';
     
     const url = $request.url;
     
-    // 检查是否是目标URL - 更新为新的接口
-    if (!url.includes('n05.sentezhenxuan.com/api/goods_details_user')) {
+    // 检查是否是目标URL
+    if (!url.includes('n05.sentezhenxuan.com/api/user')) {
         $done({});
         return;
     }
     
     try {
-        // 处理请求 - 捕获Authorization
-        if ($request && $request.headers) {
-            const headers = $request.headers;
-            const authorization = headers['Authori-zation'] || headers['Authorization'] || headers['authorization'];
-            
-            if (!authorization) {
-                console.log('[YYZX] 未找到Authorization头部');
-                $done({});
-                return;
-            }
-            
-            console.log(`[YYZX] 捕获到Authorization: ${authorization.substring(0, 20)}...`);
-            
-            // 保存当前Authorization到临时变量，等待响应
-            $prefs.setValueForKey(authorization, 'yyzx_temp_authorization');
-            
-            // 立即返回，等待响应
+        const headers = $request.headers;
+        const authorization = headers['Authori-zation'] || headers['Authorization'] || headers['authorization'];
+        
+        if (!authorization) {
+            console.log('[SXSGTOKEN] 未找到Authorization头部');
             $done({});
             return;
         }
         
-        // 处理响应 - 捕获UID
-        if ($response && $response.body) {
-            const authorization = $prefs.valueForKey('yyzx_temp_authorization');
-            
-            if (!authorization) {
-                console.log('[YYZX] 没有找到临时保存的Authorization');
-                $done({});
-                return;
+        console.log(`[SXSGTOKEN] 捕获到Authorization: ${authorization.substring(0, 20)}...`);
+        
+        // 保存到BoxJS
+        $prefs.setValueForKey(authorization, 'sxsgtoken_current');
+        
+        // 多账号管理（换行分隔）
+        const storedTokens = $prefs.valueForKey('SXSGTOKEN') || '';
+        let tokensArray = storedTokens ? storedTokens.split('\n').filter(t => t.trim() !== '') : [];
+        
+        // 移除可能存在的旧序号
+        const cleanTokens = tokensArray.map(token => {
+            return token.replace(/^\d+#/, '');
+        });
+        
+        const isNewToken = !cleanTokens.includes(authorization);
+        
+        if (isNewToken) {
+            // 新token，添加到数组
+            if (cleanTokens.length >= 10) {
+                cleanTokens.shift(); // 移除最早的账号
             }
+            cleanTokens.push(authorization);
             
-            let body = $response.body;
-            if (typeof body === 'string') {
-                try {
-                    body = JSON.parse(body);
-                } catch (e) {
-                    console.log('[YYZX] 响应体JSON解析失败');
-                    $done({});
-                    return;
-                }
-            }
-            
-            // 提取UID - 根据实际响应结构调整
-            const uid = body.uid || body.data?.uid || body.user?.uid;
-            
-            if (!uid) {
-                console.log('[YYZX] 未找到UID字段，响应体:', JSON.stringify(body).substring(0, 200));
-                $done({});
-                return;
-            }
-            
-            console.log(`[YYZX] 捕获到UID: ${uid}, Authorization: ${authorization.substring(0, 15)}...`);
-            
-            // 保存到BoxJS的YYZX数据
-            const storedData = $prefs.valueForKey('YYZX') || '';
-            let dataArray = storedData ? storedData.split('\n').filter(item => item.trim() !== '') : [];
-            
-            // 查找是否已存在相同UID的记录
-            let found = false;
-            const newDataArray = dataArray.map(item => {
-                const [existingUid] = item.split('#');
-                if (existingUid === uid.toString()) {
-                    found = true;
-                    return `${uid}#${authorization}`; // 更新Authorization
-                }
-                return item;
+            // 添加序号并保存用换行分隔的字符串
+            const numberedTokens = cleanTokens.map((token, index) => {
+                return `${index + 1}#${token}`;
             });
             
-            if (!found) {
-                // 新UID，添加到数组
-                newDataArray.push(`${uid}#${authorization}`);
-                
-                // 限制最多保存10个账号
-                if (newDataArray.length > 10) {
-                    newDataArray.shift(); // 移除最早的账号
-                }
-            }
-            
-            // 保存到YYZX
-            const newDataString = newDataArray.join('\n');
-            $prefs.setValueForKey(newDataString, 'YYZX');
-            
-            // 清理临时数据
-            $prefs.removeValueForKey('yyzx_temp_authorization');
-            
-            // 发送通知
-            $notify(
-                found ? "🔄 YYZX Token更新" : "✅ YYZX 新Token",
-                `UID: ${uid}`,
-                `账号数: ${newDataArray.length}\nToken: ${authorization.substring(0, 15)}...`
-            );
-            
-            // 自动复制当前token
-            if (typeof $tool !== 'undefined' && $tool.copy) {
-                $tool.copy(authorization);
-            }
+            const newTokensString = numberedTokens.join('\n');
+            $prefs.setValueForKey(newTokensString, 'SXSGTOKEN');
+        }
+        
+        // 单条精简通知
+        $notify(
+            isNewToken ? "✅ 新SXSGTOKEN" : "🔄 SXSGTOKEN",
+            `账号数: ${cleanTokens.length}`,
+            `Token: ${authorization.substring(0, 15)}...`
+        );
+        
+        // 自动复制当前token
+        if (typeof $tool !== 'undefined' && $tool.copy) {
+            $tool.copy(authorization);
         }
         
     } catch (error) {
-        console.log(`[YYZX] 错误: ${error}`);
-        // 清理临时数据
-        $prefs.removeValueForKey('yyzx_temp_authorization');
+        console.log(`[SXSGTOKEN] 错误: ${error}`);
     }
     
     $done({});
