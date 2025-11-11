@@ -1,8 +1,3 @@
-/**
- * Boxjs到青龙面板批量同步脚本（最终工作版）
- * 使用删除重建方案，避免更新API的验证问题
- */
-
 // ==================== 从Boxjs读取配置 ====================
 function getQLConfigFromBoxjs() {
     const config = {
