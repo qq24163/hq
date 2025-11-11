@@ -12,9 +12,9 @@ const QL_CONFIG = {
 
 const TOKEN_CONFIG = [
     { boxjsKey: 'aliyunWeb_data', qlEnvName: 'aliyunWeb_data', remarks: '阿里云数据从Boxjs同步' },
-    { boxjsKey: 'IQOO', qlEnvName: 'IQOO', remarks: 'IQOO Token从Boxjs同步' },
-    { boxjsKey: 'BDDTTOKEN', qlEnvName: 'BDDT', remarks: 'BDDT Token从Boxjs同步' },
-    { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛数据从Boxjs同步' }
+    { boxjsKey: 'IQOO', qlEnvName: 'IQOO', remarks: 'IQOO从Boxjs同步' },
+    { boxjsKey: 'BDDTTOKEN', qlEnvName: 'BDDT', remarks: 'BDDT从Boxjs同步' },
+    { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛会员俱乐部从Boxjs同步' }
 ];
 
 // HTTP请求函数
