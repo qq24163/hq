@@ -158,13 +158,23 @@ runSync().then(result => {
     console.log(`❌ 失败: ${errorCount} 个`);
     
     // 发送推送通知
-    const notificationMessage = `成功:${successCount} 失败:${errorCount} 跳过:${skipCount}`;
-    $notification.post('Boxjs同步完成', notificationMessage, `总处理: ${totalCount}个`);
+    const title = 'Boxjs同步完成';
+    const subtitle = `成功:${successCount} 失败:${errorCount} 跳过:${skipCount}`;
+    const body = `总处理: ${totalCount}个`;
+    
+    console.log(`📱 发送推送: ${title} - ${subtitle}`);
+    $notification.post(title, subtitle, body);
     
     console.log('🎉 脚本执行完成！');
+    
 }).catch(error => {
     console.log('❌ 脚本执行异常:', error);
+    // 错误时也发送推送
     $notification.post('Boxjs同步失败', '执行异常', error.message);
+    
 }).finally(() => {
-    $done();
+    // 确保脚本结束
+    setTimeout(() => {
+        $done();
+    }, 1000);
 });
