@@ -1,3 +1,8 @@
+/**
+ * Boxjs到青龙面板批量同步脚本（最终工作版）
+ * 使用删除重建方案，避免更新API的验证问题
+ */
+
 // ==================== 从Boxjs读取配置 ====================
 function getQLConfigFromBoxjs() {
     const config = {
@@ -308,7 +313,6 @@ async function batchSyncFromBoxjs() {
     if (!checkQLConfig()) {
         const message = '请在Boxjs中设置ql_url、ql_client_id、ql_client_secret';
         console.log(`❌ ${message}`);
-        $notification.post('配置错误', '缺少青龙面板配置', message);
         return {
             total: 0,
             success: 0,
@@ -407,26 +411,8 @@ async function batchSyncFromBoxjs() {
     console.log(`⏭️ 跳过: ${skipCount} 个`);
     console.log(`❌ 失败: ${errorCount} 个`);
     console.log('⏰ 结束时间:', new Date().toLocaleString());
+    console.log('🎉 脚本执行完成！');
     
-    // 5. 发送通知
-    let notificationMessage = '';
-    if (successCount > 0) {
-        notificationMessage += `成功: ${successCount}个`;
-    }
-    if (errorCount > 0) {
-        notificationMessage += notificationMessage ? `, 失败: ${errorCount}个` : `失败: ${errorCount}个`;
-    }
-    if (skipCount > 0) {
-        notificationMessage += notificationMessage ? `, 跳过: ${skipCount}个` : `跳过: ${skipCount}个`;
-    }
-    
-    $notification.post(
-        'Boxjs同步青龙面板', 
-        notificationMessage || '同步完成',
-        `青龙面板: ${QL_CONFIG.url.replace('http://', '')}`
-    );
-    
-    // 6. 返回详细结果
     return {
         total: totalCount,
         success: successCount,
@@ -448,7 +434,6 @@ async function main() {
         
         if (!configCheck) {
             console.log('❌ 配置不完整，无法执行同步');
-            $notification.post('配置错误', '缺少青龙面板配置', '请在Boxjs中设置相关变量');
             return;
         }
         
@@ -461,7 +446,6 @@ async function main() {
         
     } catch (error) {
         console.log('❌ 脚本执行异常:', error);
-        $notification.post('Boxjs同步失败', '脚本执行异常', error.message);
     }
 }
 
