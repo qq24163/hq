@@ -1,9 +1,3 @@
-/**
- * Boxjs到青龙面板批量同步脚本（QX专用版）
- * 功能：从Boxjs读取配置，并将Boxjs中的Token数据同步到青龙面板
- * 注意：此脚本专为Quantumult X设计
- */
-
 // ==================== 从Boxjs读取配置 ====================
 function getQLConfigFromBoxjs() {
     const config = {
