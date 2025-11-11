@@ -12,9 +12,9 @@ const QL_CONFIG = {
 
 const TOKEN_CONFIG = [
     { boxjsKey: 'aliyunWeb_data', qlEnvName: 'aliyunWeb_data', remarks: '阿里云数据从Boxjs同步' },
-    { boxjsKey: 'IQOO', qlEnvName: 'IQOO', remarks: 'IQOO从Boxjs同步' },
-    { boxjsKey: 'BDDTTOKEN', qlEnvName: 'BDDT', remarks: 'BDDT从Boxjs同步' },
-    { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛会员俱乐部从Boxjs同步' }
+    { boxjsKey: 'IQOO', qlEnvName: 'IQOO', remarks: 'IQOO Token从Boxjs同步' },
+    { boxjsKey: 'BDDTTOKEN', qlEnvName: 'BDDT', remarks: 'BDDT Token从Boxjs同步' },
+    { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛数据从Boxjs同步' }
 ];
 
 // HTTP请求函数
@@ -112,7 +112,7 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
 }
 
 // 主执行函数
-function main() {
+async function runSync() {
     console.log('🚀 Boxjs到青龙面板同步开始\n');
     
     let successCount = 0;
@@ -120,54 +120,51 @@ function main() {
     let errorCount = 0;
     let totalCount = 0;
     
-    // 使用Promise链来处理异步
-    let promise = Promise.resolve();
-    
-    TOKEN_CONFIG.forEach(config => {
-        promise = promise.then(async () => {
-            const value = $prefs.valueForKey(config.boxjsKey);
-            if (value) {
-                totalCount++;
-                console.log(`📦 ${config.qlEnvName} (${value.length}字符)`);
-                
-                const success = await syncToQL(config.qlEnvName, value, config.remarks);
-                if (success) {
-                    successCount++;
-                } else {
-                    errorCount++;
-                }
-                
-                // 延迟1秒（除了最后一个）
-                if (totalCount < TOKEN_CONFIG.length) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
+    for (const config of TOKEN_CONFIG) {
+        const value = $prefs.valueForKey(config.boxjsKey);
+        if (value) {
+            totalCount++;
+            console.log(`📦 ${config.qlEnvName} (${value.length}字符)`);
+            
+            const success = await syncToQL(config.qlEnvName, value, config.remarks);
+            if (success) {
+                successCount++;
             } else {
-                skipCount++;
-                console.log(`⏭️ 跳过 ${config.qlEnvName}: Boxjs中无数据`);
+                errorCount++;
             }
-        });
-    });
+            
+            // 延迟1秒（除了最后一个）
+            if (totalCount < TOKEN_CONFIG.length) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        } else {
+            skipCount++;
+            console.log(`⏭️ 跳过 ${config.qlEnvName}: Boxjs中无数据`);
+        }
+    }
     
-    promise.then(() => {
-        // 输出汇总报告
-        console.log(`\n📊 同步完成报告`);
-        console.log(`总处理: ${totalCount} 个`);
-        console.log(`✅ 成功: ${successCount} 个`);
-        console.log(`⏭️ 跳过: ${skipCount} 个`);
-        console.log(`❌ 失败: ${errorCount} 个`);
-        
-        // 发送推送通知
-        const notificationMessage = `成功:${successCount} 失败:${errorCount} 跳过:${skipCount}`;
-        $notification.post('Boxjs同步完成', notificationMessage, `总处理: ${totalCount}个`);
-        
-        console.log('✅ 脚本执行完毕');
-        $done();
-    }).catch(error => {
-        console.log('❌ 脚本执行异常:', error);
-        $notification.post('Boxjs同步失败', '执行异常', error.message);
-        $done();
-    });
+    return { successCount, skipCount, errorCount, totalCount };
 }
 
 // 启动脚本
-main();
+runSync().then(result => {
+    const { successCount, skipCount, errorCount, totalCount } = result;
+    
+    // 输出汇总报告
+    console.log(`\n📊 同步完成报告`);
+    console.log(`总处理: ${totalCount} 个`);
+    console.log(`✅ 成功: ${successCount} 个`);
+    console.log(`⏭️ 跳过: ${skipCount} 个`);
+    console.log(`❌ 失败: ${errorCount} 个`);
+    
+    // 发送推送通知
+    const notificationMessage = `成功:${successCount} 失败:${errorCount} 跳过:${skipCount}`;
+    $notification.post('Boxjs同步完成', notificationMessage, `总处理: ${totalCount}个`);
+    
+    console.log('🎉 脚本执行完成！');
+}).catch(error => {
+    console.log('❌ 脚本执行异常:', error);
+    $notification.post('Boxjs同步失败', '执行异常', error.message);
+}).finally(() => {
+    $done();
+});
