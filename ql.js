@@ -39,8 +39,8 @@ const TOKEN_CONFIG = [
     },
     {
         boxjsKey: 'RedBull',
-        qlEnvName: 'REDBULL', 
-        remarks: '红牛数据从Boxjs同步',
+        qlEnvName: 'RedBull', 
+        remarks: '红牛会员俱乐部从Boxjs同步',
         required: false
     }
     // 可以继续添加其他需要同步的Token
@@ -170,10 +170,30 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
         let result;
         
         if (existingEnv) {
-            // 更新现有变量
+            // 更新现有变量 - 使用完整的更新数据结构
             console.log(`📝 更新现有变量: ${envName}`);
             console.log(`   旧值: ${existingEnv.value ? existingEnv.value.substring(0, 30) + '...' : '空值'}`);
             console.log(`   新值: ${envValue.substring(0, 30)}...`);
+            
+            // 构建完整的更新数据
+            const updateData = {
+                value: envValue,
+                name: envName,
+                remarks: remarks,
+                id: existingEnv.id || existingEnv._id, // 兼容不同字段名
+                _id: existingEnv._id || existingEnv.id, // 兼容不同字段名
+                created: existingEnv.created,
+                status: existingEnv.status,
+                position: existingEnv.position,
+                timestamp: existingEnv.timestamp
+            };
+            
+            // 移除undefined字段
+            Object.keys(updateData).forEach(key => {
+                if (updateData[key] === undefined) {
+                    delete updateData[key];
+                }
+            });
             
             const updateResp = await qxHttpRequest({
                 url: `${QL_CONFIG.url}/open/envs`,
@@ -183,12 +203,7 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
                     'Content-Type': 'application/json',
                     'User-Agent': 'QuantumultX'
                 },
-                body: JSON.stringify({
-                    name: envName,
-                    value: envValue,
-                    _id: existingEnv._id,
-                    remarks: remarks
-                }),
+                body: JSON.stringify(updateData),
                 timeout: 10000
             });
             
