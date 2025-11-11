@@ -104,11 +104,6 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
     }
 }
 
-// 发送推送通知
-function sendNotification(title, subtitle, body) {
-    $notification.post(title, subtitle, body);
-}
-
 // 主函数
 async function main() {
     console.log('🚀 Boxjs到青龙面板同步开始\n');
@@ -146,15 +141,20 @@ async function main() {
     console.log(`✅ 成功: ${successCount} 个`);
     console.log(`⏭️ 跳过: ${skipCount} 个`);
     console.log(`❌ 失败: ${errorCount} 个`);
-    console.log('✅ 脚本执行完毕');
     
     // 发送推送通知
-    const notificationTitle = 'Boxjs同步完成';
-    const notificationSubtitle = `成功: ${successCount}个, 失败: ${errorCount}个`;
-    const notificationBody = `总处理: ${totalCount}个, 跳过: ${skipCount}个`;
+    const notificationMessage = `成功:${successCount} 失败:${errorCount} 跳过:${skipCount}`;
+    $notification.post('Boxjs同步完成', notificationMessage, `总处理: ${totalCount}个`);
     
-    sendNotification(notificationTitle, notificationSubtitle, notificationBody);
+    console.log('✅ 脚本执行完毕 - 请查看推送通知');
+    
+    // 明确结束脚本
+    $done();
 }
 
 // 执行
-main().catch(console.error);
+main().catch(error => {
+    console.log('❌ 脚本执行异常:', error);
+    $notification.post('Boxjs同步失败', '执行异常', error.message);
+    $done();
+});
