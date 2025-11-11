@@ -7,7 +7,7 @@ hostname = n05.sentezhenxuan.com
 [rewrite_local]
 ^https?:\/\/n05\.sentezhenxuan\.com\/api\/user url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sxsgtoken.js
 */
-// capture-sxsgtoken.js - 捕获Authorization和昵称并格式化存储
+// capture-sxsgtoken.js - 捕获Authorization和UID并格式化存储
 (function() {
     'use strict';
     
@@ -30,18 +30,18 @@ hostname = n05.sentezhenxuan.com
             return;
         }
         
-        // 获取响应体中的昵称
+        // 获取响应体中的UID
         const body = JSON.parse($response.body);
-        if (!body.data || !body.data.nickname) {
-            console.log('[SXSGTOKEN] 未找到昵称数据');
+        if (!body.data || !body.data.uid) {
+            console.log('[SXSGTOKEN] 未找到UID数据');
             $done({});
             return;
         }
         
-        const nickname = body.data.nickname;
-        const newTokenData = `${nickname}#${authorization}`;
+        const uid = body.data.uid;
+        const newTokenData = `${uid}#${authorization}`;
         
-        console.log(`[SXSGTOKEN] 捕获到数据: ${nickname} - ${authorization.substring(0, 20)}...`);
+        console.log(`[SXSGTOKEN] 捕获到数据: UID ${uid} - ${authorization.substring(0, 20)}...`);
         
         // 保存当前token到BoxJS
         $prefs.setValueForKey(authorization, 'sxsgtoken_current');
@@ -53,11 +53,11 @@ hostname = n05.sentezhenxuan.com
         let isUpdated = false;
         let updatedTokens = [];
         
-        // 检查是否已存在该昵称，如果存在则更新
+        // 检查是否已存在该UID，如果存在则更新
         for (let token of tokensArray) {
-            const [existingNickname] = token.split('#');
-            if (existingNickname === nickname) {
-                // 找到相同昵称，更新数据
+            const [existingUid] = token.split('#');
+            if (existingUid === uid.toString()) {
+                // 找到相同UID，更新数据
                 updatedTokens.push(newTokenData);
                 isUpdated = true;
             } else {
@@ -65,7 +65,7 @@ hostname = n05.sentezhenxuan.com
             }
         }
         
-        // 如果是新昵称，添加到数组
+        // 如果是新UID，添加到数组
         if (!isUpdated) {
             updatedTokens.push(newTokenData);
         }
@@ -77,11 +77,11 @@ hostname = n05.sentezhenxuan.com
         // 单条精简通知
         $notify(
             isUpdated ? "🔄 SXSGTOKEN已更新" : "✅ SXSGTOKEN已保存",
-            `账号: ${nickname}`,
+            `UID: ${uid}`,
             `Token: ${authorization.substring(0, 15)}...\n总账号数: ${updatedTokens.length}`
         );
         
-        console.log(`[SXSGTOKEN] ${isUpdated ? '更新' : '新增'}账号数据: ${nickname}`);
+        console.log(`[SXSGTOKEN] ${isUpdated ? '更新' : '新增'}账号数据: UID ${uid}`);
         
     } catch (error) {
         console.log(`[SXSGTOKEN] 错误: ${error}`);
