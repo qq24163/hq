@@ -147,14 +147,16 @@ async function main() {
     $notification.post('Boxjs同步完成', notificationMessage, `总处理: ${totalCount}个`);
     
     console.log('✅ 脚本执行完毕 - 请查看推送通知');
-    
-    // 明确结束脚本
-    $done();
 }
 
-// 执行
-main().catch(error => {
+// 执行并处理完成
+try {
+    await main();
+    console.log('🎉 所有任务完成！');
+} catch (error) {
     console.log('❌ 脚本执行异常:', error);
     $notification.post('Boxjs同步失败', '执行异常', error.message);
-    $done();
-});
+}
+
+// 明确结束脚本
+$done();
