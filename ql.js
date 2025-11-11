@@ -104,10 +104,10 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
         await createQLEnv(token, envName, envValue, remarks);
         console.log(`   ✅ 同步成功`);
         
-        return true;
+        return { success: true, envName: envName };
     } catch (error) {
         console.log(`   ❌ 失败: ${error.message}`);
-        return false;
+        return { success: false, envName: envName, error: error.message };
     }
 }
 
@@ -115,62 +115,63 @@ async function syncToQL(envName, envValue, remarks = '从Boxjs同步') {
 async function runSync() {
     console.log('🚀 Boxjs到青龙面板同步开始\n');
     
-    let successCount = 0;
-    let skipCount = 0;
-    let errorCount = 0;
-    let totalCount = 0;
+    const results = [];
     
     for (const config of TOKEN_CONFIG) {
         const value = $prefs.valueForKey(config.boxjsKey);
         if (value) {
-            totalCount++;
             console.log(`📦 ${config.qlEnvName} (${value.length}字符)`);
             
-            const success = await syncToQL(config.qlEnvName, value, config.remarks);
-            if (success) {
-                successCount++;
-            } else {
-                errorCount++;
-            }
+            const result = await syncToQL(config.qlEnvName, value, config.remarks);
+            results.push(result);
             
             // 延迟1秒（除了最后一个）
-            if (totalCount < TOKEN_CONFIG.length) {
+            if (results.length < TOKEN_CONFIG.length) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         } else {
-            skipCount++;
             console.log(`⏭️ 跳过 ${config.qlEnvName}: Boxjs中无数据`);
+            results.push({ success: false, envName: config.qlEnvName, error: 'Boxjs中无数据', skipped: true });
         }
     }
     
-    return { successCount, skipCount, errorCount, totalCount };
+    return results;
 }
 
 // 启动脚本
-runSync().then(result => {
-    const { successCount, skipCount, errorCount, totalCount } = result;
-    
+runSync().then(results => {
     // 输出汇总报告
     console.log(`\n📊 同步完成报告`);
-    console.log(`总处理: ${totalCount} 个`);
-    console.log(`✅ 成功: ${successCount} 个`);
-    console.log(`⏭️ 跳过: ${skipCount} 个`);
-    console.log(`❌ 失败: ${errorCount} 个`);
     
-    // 单条精简通知
-    if (errorCount === 0) {
-        $notify(
-            "✅ Boxjs同步成功",
-            `处理: ${totalCount}个`,
-            `成功: ${successCount} 跳过: ${skipCount}`
-        );
-    } else {
-        $notify(
-            "⚠️ Boxjs同步完成",
-            `成功: ${successCount} 失败: ${errorCount}`,
-            `处理: ${totalCount}个 跳过: ${skipCount}`
-        );
-    }
+    const successResults = results.filter(r => r.success);
+    const errorResults = results.filter(r => !r.success && !r.skipped);
+    const skipResults = results.filter(r => r.skipped);
+    
+    console.log(`总处理: ${results.length} 个`);
+    console.log(`✅ 成功: ${successResults.length} 个`);
+    console.log(`⏭️ 跳过: ${skipResults.length} 个`);
+    console.log(`❌ 失败: ${errorResults.length} 个`);
+    
+    // 构建详细结果消息
+    let successList = [];
+    let errorList = [];
+    
+    results.forEach(result => {
+        if (result.success) {
+            successList.push(`${result.envName} ✅`);
+        } else if (result.skipped) {
+            successList.push(`${result.envName} ⏭️`);
+        } else {
+            errorList.push(`${result.envName} ❌`);
+        }
+    });
+    
+    // 单条精简通知 - 显示每个变量的结果
+    const title = errorList.length === 0 ? "✅ Boxjs同步完成" : "⚠️ Boxjs同步完成";
+    const subtitle = `成功:${successList.length} 失败:${errorList.length}`;
+    const body = successList.join('\n') + (errorList.length > 0 ? '\n' + errorList.join('\n') : '');
+    
+    $notify(title, subtitle, body);
     
     console.log('🎉 脚本执行完成！');
     
