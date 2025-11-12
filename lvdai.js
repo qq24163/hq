@@ -8,6 +8,7 @@ hostname = www.lvdhb.com
 # LVDAI Token捕获
 ^https:\/\/www\.lvdhb\.com\/MiniProgramApiCore\/api\/v3\/My\/GetMyInfo url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/lvdai.js
 */
+
 // lvdai.js - 捕获LVDAI Token并管理多账号
 (function() {
     'use strict';
@@ -52,7 +53,7 @@ hostname = www.lvdhb.com
         
         // 遍历现有token检查重复
         for (let i = 0; i < tokensArray.length; i++) {
-            const existingToken = tokensArray[i].split('#')[1];
+            const existingToken = tokensArray[i].split('#')[0]; // 提取token部分
             if (existingToken === newToken) {
                 isNewToken = false;
                 accountNumber = i + 1;
@@ -61,8 +62,8 @@ hostname = www.lvdhb.com
         }
         
         if (isNewToken) {
-            // 新token，添加到数组
-            tokensArray.push(`账号${tokensArray.length + 1}#${newToken}`);
+            // 新token，添加到数组，格式：token#序号
+            tokensArray.push(`${newToken}#${tokensArray.length + 1}`);
             
             // 保存到BoxJS
             $prefs.setValueForKey(tokensArray.join('\n'), STORAGE_KEY);
