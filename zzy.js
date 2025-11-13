@@ -6,14 +6,14 @@ hostname = app.duoyukeji.net
 
 [rewrite_local]
 # ZZY user-token捕获
-^https:\/\/app\.duoyukeji\.net\/api url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/zzy.js
+^https:\/\/app\.duoyukeji\.net\/api\/open\/popularize\/userMessage url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/zzy.js
 
 */
 // zzy.js - 捕获ZZY user-token并管理多账号
 (function() {
     'use strict';
     
-    const TARGET_URL = 'https://app.duoyukeji.net/api';
+    const TARGET_URL = 'https://app.duoyukeji.net/api/open/popularize/userMessage';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
