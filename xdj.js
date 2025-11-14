@@ -1,18 +1,19 @@
 /*
 -------------- Quantumult X 配置 --------------
 
-[MITM][MITM]
+[MITM]
 hostname = lm.api.sujh.net
 
 [rewrite_local]
 # XDJ Authorization和User-Agent捕获
-^https:\/\/lm\.api\.sujh\.net\/app\/index\/index url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/xdj.js
+^https:\/\/lm\.api\.sujh\.net\/app\/user\/index url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/xdj.js
+
 */
 // xdj.js - 捕获XDJ Authorization和User-Agent并管理多账号
 (function() {
     'use strict';
     
-    const TARGET_URL = 'https://lm.api.sujh.net/app/index/index';
+    const TARGET_URL = 'https://lm.api.sujh.net/app/user/index';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
