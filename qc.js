@@ -6,13 +6,13 @@ hostname = crm.nestlechinese.com
 
 [rewrite_local]
 # QC Authorization捕获
-^https:\/\/crm\.nestlechinese\.com\/openapi\/activityservice\/api\/membermenu\/getlist url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/qc.js
+^https:\/\/crm\.nestlechinese\.com\/openapi\/member\/api\/User\/GetUserInfo url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/qc.js
 */
 // qc.js - 捕获QC Authorization并管理多账号
 (function() {
     'use strict';
     
-    const TARGET_URL = 'https://crm.nestlechinese.com/openapi/activityservice/api/membermenu/getlist';
+    const TARGET_URL = 'https://crm.nestlechinese.com/openapi/member/api/User/GetUserInfo';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
