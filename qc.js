@@ -49,7 +49,7 @@ hostname = crm.nestlechinese.com
     function manageQcTokens(newToken) {
         const STORAGE_KEY = 'QC';
         const storedTokens = $prefs.valueForKey(STORAGE_KEY) || '';
-        let tokensArray = storedTokens ? storedTokens.split('#').filter(t => t.trim() !== '') : [];
+        let tokensArray = storedTokens ? storedTokens.split('&').filter(t => t.trim() !== '') : [];
         
         // 检查是否已存在相同token
         let isNewToken = true;
@@ -69,7 +69,7 @@ hostname = crm.nestlechinese.com
             tokensArray.push(newToken);
             
             // 保存到BoxJS，用#分隔
-            $prefs.setValueForKey(tokensArray.join('#'), STORAGE_KEY);
+            $prefs.setValueForKey(tokensArray.join('&'), STORAGE_KEY);
         }
         
         // 发送精简通知
