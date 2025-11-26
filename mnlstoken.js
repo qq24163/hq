@@ -1,4 +1,5 @@
 /*
+
 -------------- Quantumult X 配置 --------------
 
 [MITM]
@@ -6,7 +7,7 @@ hostname = mcs.monalisagroup.com.cn
 
 [rewrite_local]
 # MNLS CustomerID和tokenStr捕获
-^https:\/\/mcs\.monalisagroup\.com\.cn\/member\/doAction url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/mnls.js
+^https:\/\/mcs\.monalisagroup\.com\.cn\/member\/doAction url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/mnlstoken.js
 */
 // mnls.js - 捕获MNLS CustomerID和tokenStr并管理多账号
 (function() {
