@@ -6,10 +6,10 @@
 hostname = mcs.monalisagroup.com.cn
 
 [rewrite_local]
-# MNLS CustomerID和tokenStr捕获
-^https:\/\/mcs\.monalisagroup\.com\.cn\/member\/doAction url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/mnlstoken.js
+# MNLS 请求主体表单数据捕获
+^https:\/\/mcs\.monalisagroup\.com\.cn\/member\/doAction url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/mnlstoken.js
 */
-// mnls.js - 捕获MNLS CustomerID和tokenStr并管理多账号
+// mnls.js - 捕获MNLS请求主体表单数据并管理多账号
 (function() {
     'use strict';
     
@@ -22,18 +22,31 @@ hostname = mcs.monalisagroup.com.cn
     }
     
     try {
-        const headers = $request.headers;
-        const customerID = headers['CustomerID'] || headers['customerid'] || headers['CustomerId'];
-        const tokenStr = headers['tokenStr'] || headers['tokenstr'] || headers['TokenStr'];
+        // 获取请求主体
+        const body = $request.body;
+        if (!body) {
+            console.log('[MNLS] 请求主体为空');
+            $done({});
+            return;
+        }
+        
+        let customerID, tokenStr;
+        
+        // 解析表单数据
+        const params = new URLSearchParams(body);
+        
+        // 尝试获取CustomerID和tokenStr
+        customerID = params.get('CustomerID') || params.get('customerid') || params.get('CustomerId');
+        tokenStr = params.get('tokenStr') || params.get('tokenstr') || params.get('TokenStr');
         
         if (!customerID) {
-            console.log('[MNLS] 未找到CustomerID头部');
+            console.log('[MNLS] 未找到CustomerID参数');
             $done({});
             return;
         }
         
         if (!tokenStr) {
-            console.log('[MNLS] 未找到tokenStr头部');
+            console.log('[MNLS] 未找到tokenStr参数');
             $done({});
             return;
         }
