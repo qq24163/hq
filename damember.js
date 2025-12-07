@@ -8,14 +8,17 @@ hostname = m.aihoge.com
 ^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
 
-// auto-update-boxjs-only.js - 仅从BoxJS读取和更新
+// auto-update-boxjs-fixed.js - 修复版
 const memberHeader = $request.headers?.["member"];
 
 if (memberHeader) {
     try {
-        // ========== 1. 解析当前抓包的数据 ==========
+        console.log("🚀 脚本开始执行");
+        
+        // 1. 解析抓包数据
         const parts = memberHeader.split('&');
         if (parts.length < 3) {
+            console.log("❌ 数据格式错误，少于3部分");
             $done({});
             return;
         }
@@ -24,139 +27,165 @@ if (memberHeader) {
         const currentQQ = parts[1].trim();
         const jsonStr = parts.slice(2).join('&');
         
+        console.log(`📱 当前手机号: ${currentPhone}`);
+        console.log(`📧 当前QQ: ${currentQQ}`);
+        
         let currentMember;
         try {
             currentMember = JSON.parse(jsonStr);
+            console.log(`🎯 当前mark: ${currentMember.mark}`);
+            console.log(`👤 当前昵称: ${currentMember.nick_name}`);
         } catch (e) {
-            console.log("JSON解析失败");
+            console.log(`❌ JSON解析失败: ${e.message}`);
             $done({});
             return;
         }
         
-        // ========== 2. 从BoxJS读取damember数据（必须存在） ==========
-        let batchData = $prefs.valueForKey('damember');
+        // 2. 从BoxJS读取数据
+        const batchData = $prefs.valueForKey('damember');
+        console.log(`📦 读取BoxJS damember: ${batchData ? '成功' : '失败'}`);
         
         if (!batchData || batchData.trim() === '') {
+            console.log("❌ BoxJS中damember数据为空");
             $notify(
-                "❌ BoxJS数据不存在",
-                "请在BoxJS中先设置damember数据",
-                "数据名: damember\n格式: 手机号&qq&JSON"
+                "❌ BoxJS数据为空",
+                "请在BoxJS中设置damember数据",
+                "数据名: damember"
             );
             $done({});
             return;
         }
         
-        console.log("✅ 从BoxJS读取到damember数据");
+        console.log(`📊 原始数据长度: ${batchData.length} 字符`);
         
-        // ========== 3. 解析并更新批量数据 ==========
+        // 3. 分割数据（注意：你的数据是用空格分隔的）
         const batchItems = batchData.split(/\s+/).filter(item => item.trim());
-        let updatedBatch = [];
-        let updatedCount = 0;
-        let matchedAccount = null;
+        console.log(`📋 分割出 ${batchItems.length} 个账号`);
         
-        for (const item of batchItems) {
+        let updated = false;
+        let matchedPhone = null;
+        const updatedItems = [];
+        
+        // 4. 遍历并匹配
+        for (let i = 0; i < batchItems.length; i++) {
+            const item = batchItems[i];
             const itemParts = item.split('&');
+            
             if (itemParts.length >= 3) {
                 const itemPhone = itemParts[0].trim();
                 const itemQQ = itemParts[1].trim();
                 const itemJsonStr = itemParts.slice(2).join('&');
                 
+                console.log(`\n🔍 检查账号 ${i+1}: ${itemPhone}`);
+                
                 try {
                     const itemMember = JSON.parse(itemJsonStr);
+                    const itemMark = itemMember.mark;
                     
-                    // ========== 4. 匹配逻辑 ==========
-                    let isMatch = false;
+                    console.log(`   数据库mark: ${itemMark}`);
+                    console.log(`   当前mark: ${currentMember.mark}`);
                     
-                    // 优先使用手机号匹配
+                    // 匹配逻辑：先手机号，后mark
                     if (itemPhone === currentPhone) {
-                        isMatch = true;
-                        console.log(`📱 手机号匹配: ${itemPhone}`);
-                    }
-                    // 其次使用mark匹配
-                    else if (itemMember.mark && currentMember.mark && 
-                             itemMember.mark === currentMember.mark) {
-                        isMatch = true;
-                        console.log(`🎯 mark匹配: ${itemPhone} (${itemMember.mark})`);
-                    }
-                    
-                    if (isMatch) {
-                        // 找到匹配的账号，进行更新
-                        matchedAccount = {
-                            phone: itemPhone,
-                            oldMark: itemMember.mark,
-                            newMark: currentMember.mark
-                        };
+                        console.log(`✅ 手机号匹配成功！`);
+                        matchedPhone = itemPhone;
+                        updated = true;
                         
-                        // 创建更新后的条目（保持phone和qq不变）
+                        // 创建更新后的数据
                         const updatedMember = {
-                            ...itemMember,      // 原数据
-                            ...currentMember,   // 用抓包数据覆盖
-                            // 确保关键字段
-                            id: currentMember.id || itemMember.id,
+                            ...itemMember,
+                            ...currentMember,
+                            // 确保重要字段
                             mark: currentMember.mark || itemMember.mark,
-                            nick_name: currentMember.nick_name || itemMember.nick_name
+                            nick_name: currentMember.nick_name || itemMember.nick_name,
+                            token: currentMember.token || itemMember.token,
+                            btoken: currentMember.btoken || itemMember.btoken,
+                            mtoken: currentMember.mtoken || itemMember.mtoken,
+                            stoken: currentMember.stoken || itemMember.stoken,
+                            expire: currentMember.expire || itemMember.expire
                         };
                         
                         const updatedItem = `${itemPhone}&${itemQQ}&${JSON.stringify(updatedMember)}`;
-                        updatedBatch.push(updatedItem);
-                        updatedCount++;
+                        updatedItems.push(updatedItem);
+                        console.log(`   已更新账号数据`);
                         
-                        console.log(`✅ 已更新账号: ${itemPhone}`);
+                    } else if (itemMark && currentMember.mark && itemMark === currentMember.mark) {
+                        console.log(`✅ mark匹配成功！`);
+                        matchedPhone = itemPhone;
+                        updated = true;
+                        
+                        // 创建更新后的数据
+                        const updatedMember = {
+                            ...itemMember,
+                            ...currentMember,
+                            // 保持手机号不变（重要！）
+                            phone: itemPhone
+                        };
+                        
+                        const updatedItem = `${itemPhone}&${itemQQ}&${JSON.stringify(updatedMember)}`;
+                        updatedItems.push(updatedItem);
+                        console.log(`   已更新账号数据 (mark匹配)`);
                         
                     } else {
                         // 不匹配，保留原数据
-                        updatedBatch.push(item);
+                        updatedItems.push(item);
+                        console.log(`   不匹配，保留原数据`);
                     }
                     
                 } catch (e) {
-                    // JSON解析失败，保留原样
-                    updatedBatch.push(item);
-                    console.log(`⚠️ 账号 ${itemPhone} 数据解析失败，已保留`);
+                    console.log(`⚠️ 账号 ${itemPhone} JSON解析失败: ${e.message}`);
+                    updatedItems.push(item); // 保留原样
                 }
             } else {
-                // 格式不正确，保留原样
-                updatedBatch.push(item);
+                console.log(`⚠️ 账号 ${i+1} 格式错误，保留原样`);
+                updatedItems.push(item);
             }
         }
         
-        // ========== 5. 保存到BoxJS ==========
-        if (updatedCount > 0) {
-            const updatedBatchData = updatedBatch.join(' ');
+        // 5. 保存更新
+        if (updated) {
+            const updatedData = updatedItems.join(' ');
             
-            // 保存到BoxJS，数据名为 damember
-            $prefs.setValueForKey(updatedBatchData, 'damember');
+            // 保存到BoxJS
+            $prefs.setValueForKey(updatedData, 'damember');
+            console.log(`💾 已保存到BoxJS damember`);
             
-            // 同时保存一份带时间戳的备份
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            $prefs.setValueForKey(updatedBatchData, `damember_backup_${timestamp}`);
-            
-            // ========== 6. 显示结果 ==========
-            let nickName = currentMember.nick_name;
+            // 显示昵称
+            let displayName = currentMember.nick_name;
             try {
-                nickName = decodeURIComponent(currentMember.nick_name);
+                displayName = decodeURIComponent(currentMember.nick_name);
             } catch (e) {}
             
             $notify(
-                "✅ BoxJS数据已更新",
-                `账号: ${matchedAccount.phone}`,
-                `昵称: ${nickName}\n更新: ${updatedCount}/${batchItems.length}\n保存到: damember`
+                "✅ 更新成功",
+                `账号: ${matchedPhone}`,
+                `昵称: ${displayName}\n已更新BoxJS数据`
             );
             
-            // 复制更新后的数据到剪贴板
-            $tool.copy(updatedBatchData);
+            // 复制更新后的数据
+            $tool.copy(updatedData);
             
         } else {
+            console.log(`❌ 未找到匹配账号`);
+            console.log(`当前手机号: ${currentPhone}`);
+            console.log(`当前mark: ${currentMember.mark}`);
+            
             $notify(
-                "⚠️ 未找到匹配账号",
-                `当前抓包: ${currentPhone}`,
-                `BoxJS数据中无匹配账号\n总数: ${batchItems.length}个`
+                "⚠️ 未找到匹配",
+                `当前: ${currentPhone}`,
+                `数据库中有 ${batchItems.length} 个账号\n请检查手机号或mark`
             );
         }
         
+        console.log("🎉 脚本执行完成");
+        
     } catch (e) {
-        console.log(`[ERROR] ${e.message}`);
-        $notify("❌ 更新失败", e.message, "");
+        console.log(`💥 脚本错误: ${e.message}`);
+        console.log(`堆栈: ${e.stack}`);
+        $notify("❌ 脚本错误", e.message, "");
     }
+} else {
+    console.log("📭 未找到member请求头");
 }
 
 $done({});
