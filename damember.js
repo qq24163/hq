@@ -8,7 +8,7 @@ hostname = m.aihoge.com
 ^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
 
-// damember.js - 只更新已存在的账号，不添加新账号
+// damember.js - 根据nick_name更新对应的完整member数据
 (function() {
     'use strict';
     
@@ -50,21 +50,20 @@ hostname = m.aihoge.com
             return;
         }
         
-        console.log(`[damember] 捕获到member数据: ${memberData.substring(0, 50)}...`);
+        console.log(`[damember] 捕获到完整member数据，长度: ${memberData.length}`);
         
-        // 解析member数据获取手机号
-        const parts = memberData.split('&');
-        if (parts.length < 3) {
-            console.log('[damember] member数据格式不正确');
+        // 解析nick_name
+        const nickName = extractNickNameFromMember(memberData);
+        if (!nickName) {
+            console.log('[damember] 无法解析nick_name');
             $done({});
             return;
         }
         
-        const phoneNumber = parts[0]; // 第一个&前的是手机号
-        console.log(`[damember] 识别到手机号: ${phoneNumber}`);
+        console.log(`[damember] 识别到昵称: ${nickName}`);
         
-        // 更新BoxJS中的特定账号（只更新已存在的）
-        updateExistingAccount(phoneNumber, memberData);
+        // 根据nick_name更新对应的完整member
+        updateMemberByNickName(nickName, memberData);
         
     } catch (error) {
         console.log(`[damember] 错误: ${error}`);
@@ -72,7 +71,37 @@ hostname = m.aihoge.com
     
     $done({});
     
-    function updateExistingAccount(phoneNumber, newAccountData) {
+    // 从member数据中提取nick_name
+    function extractNickNameFromMember(memberData) {
+        try {
+            // member格式：手机号&密码&JSON数据
+            const parts = memberData.split('&');
+            if (parts.length < 3) return null;
+            
+            // 获取JSON部分（从第三个&开始）
+            const jsonStr = parts.slice(2).join('&');
+            
+            // 解析JSON
+            const jsonData = JSON.parse(jsonStr);
+            
+            // 获取nick_name，并解码URL编码
+            if (jsonData.nick_name) {
+                try {
+                    return decodeURIComponent(jsonData.nick_name);
+                } catch (e) {
+                    return jsonData.nick_name; // 如果没有URL编码，直接返回
+                }
+            }
+            
+            return null;
+        } catch (e) {
+            console.log('[damember] 解析nick_name失败:', e);
+            return null;
+        }
+    }
+    
+    // 根据nick_name更新对应的完整member
+    function updateMemberByNickName(nickName, newMemberData) {
         const STORAGE_KEY = 'damember';
         const storedData = $prefs.valueForKey(STORAGE_KEY) || '';
         
@@ -88,15 +117,15 @@ hostname = m.aihoge.com
         let found = false;
         let updatedAccounts = [];
         
-        // 遍历现有账号，更新匹配手机号的账号
+        // 遍历现有账号，查找相同nick_name的账号
         for (let account of accounts) {
-            const accountPhone = account.split('&')[0];
+            const accountNickName = extractNickNameFromMember(account);
             
-            if (accountPhone === phoneNumber) {
-                // 找到匹配的手机号，替换为新数据
-                updatedAccounts.push(newAccountData);
+            if (accountNickName && accountNickName === nickName) {
+                // 找到匹配的nick_name，替换为新数据
+                updatedAccounts.push(newMemberData);
                 found = true;
-                console.log(`[damember] 更新账号: ${phoneNumber}`);
+                console.log(`[damember] 更新昵称为 "${nickName}" 的账号`);
             } else {
                 // 保留其他账号
                 updatedAccounts.push(account);
@@ -104,9 +133,9 @@ hostname = m.aihoge.com
         }
         
         if (!found) {
-            // 没找到匹配的手机号，不添加，保持原数据
-            console.log(`[damember] 未找到账号 ${phoneNumber}，不添加`);
-            $notify("🔄 damember", "无操作", `未找到账号: ${phoneNumber}`);
+            // 没找到匹配的nick_name，不添加
+            console.log(`[damember] 未找到昵称为 "${nickName}" 的账号，不添加`);
+            $notify("🔄 damember", "无操作", `未找到账号: ${nickName}`);
             return;
         }
         
@@ -118,7 +147,7 @@ hostname = m.aihoge.com
         
         // 发送通知
         const title = "🔄 damember 账号已更新";
-        const subtitle = `手机号: ${phoneNumber}`;
+        const subtitle = `昵称: ${nickName}`;
         const message = `当前账号数: ${updatedAccounts.length}`;
         
         $notify(title, subtitle, message);
@@ -126,8 +155,8 @@ hostname = m.aihoge.com
         
         // 自动复制当前账号数据
         if (typeof $tool !== 'undefined' && $tool.copy) {
-            $tool.copy(newAccountData);
-            console.log(`[damember] ${phoneNumber}的数据已复制到剪贴板`);
+            $tool.copy(newMemberData);
+            console.log(`[damember] "${nickName}"的数据已复制到剪贴板`);
         }
     }
 })();
