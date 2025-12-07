@@ -5,12 +5,12 @@
 hostname = m.aihoge.com
 
 [rewrite_local]
-# damember数据捕获（请求主体版本）
-^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
+# damember数据捕获（请求头部版本）
+^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 
 */
 
-// damember.js - 根据nick_name更新对应的完整member数据（JSON格式）
+// damember.js - 从请求头部获取member JSON数据并更新
 (function() {
     'use strict';
     
@@ -23,46 +23,24 @@ hostname = m.aihoge.com
     }
     
     try {
-        // 获取请求主体
-        const body = $request.body;
-        if (!body) {
-            console.log('[damember] 请求主体为空');
+        const headers = $request.headers;
+        
+        // 从请求头部获取member数据
+        let memberHeader = headers['member'] || headers['Member'] || headers['x-member'] || headers['X-Member'];
+        
+        if (!memberHeader) {
+            console.log('[damember] 请求头部中未找到member字段');
             $done({});
             return;
         }
         
-        console.log(`[damember] 请求主体: ${body.substring(0, 100)}...`);
+        console.log(`[damember] 捕获到member头部数据: ${memberHeader.substring(0, 100)}...`);
         
-        // 解析请求主体
-        let memberData = null;
-        
-        // 方法1：尝试从表单数据中获取member参数
-        if (body.includes('member=')) {
-            const match = body.match(/member=([^&]*)/);
-            if (match && match[1]) {
-                memberData = decodeURIComponent(match[1]);
-            }
+        // 清理member数据（移除可能的空格和冒号）
+        let memberData = memberHeader.trim();
+        if (memberData.startsWith('member:')) {
+            memberData = memberData.substring(7).trim();
         }
-        
-        // 方法2：尝试直接解析为JSON（如果是application/json格式）
-        if (!memberData) {
-            try {
-                const jsonData = JSON.parse(body);
-                if (jsonData.member) {
-                    memberData = typeof jsonData.member === 'string' ? jsonData.member : JSON.stringify(jsonData.member);
-                }
-            } catch (e) {
-                // 不是JSON格式
-            }
-        }
-        
-        if (!memberData) {
-            console.log('[damember] 无法从请求主体中提取member数据');
-            $done({});
-            return;
-        }
-        
-        console.log(`[damember] 提取到member数据: ${memberData.substring(0, 100)}...`);
         
         // 解析nick_name
         const nickName = extractNickNameFromMember(memberData);
@@ -86,14 +64,8 @@ hostname = m.aihoge.com
     // 从member JSON中提取nick_name
     function extractNickNameFromMember(memberData) {
         try {
-            let jsonData;
-            
-            // 尝试直接解析为JSON
-            if (typeof memberData === 'string') {
-                jsonData = JSON.parse(memberData);
-            } else {
-                jsonData = memberData;
-            }
+            // 解析JSON
+            const jsonData = JSON.parse(memberData);
             
             // 获取nick_name，并解码URL编码
             if (jsonData.nick_name) {
@@ -106,13 +78,14 @@ hostname = m.aihoge.com
             
             return null;
         } catch (e) {
-            console.log('[damember] 解析nick_name失败:', e);
+            console.log('[damember] 解析JSON失败:', e);
+            console.log('[damember] 原始数据:', memberData);
             return null;
         }
     }
     
     // 根据nick_name更新对应的完整member
-    function updateMemberByNickName(nickName, newMemberData) {
+    function updateMemberByNickName(nickName, newMemberJson) {
         const STORAGE_KEY = 'damember';
         const storedData = $prefs.valueForKey(STORAGE_KEY) || '';
         
@@ -134,7 +107,7 @@ hostname = m.aihoge.com
             
             // 尝试解析账号数据
             try {
-                // 你的示例数据格式是：手机号&密码&JSON
+                // BoxJS中的数据格式：手机号&密码&JSON
                 const parts = account.split('&');
                 if (parts.length >= 3) {
                     const jsonStr = parts.slice(2).join('&');
@@ -143,17 +116,17 @@ hostname = m.aihoge.com
                     
                     if (accountNickName && accountNickName === nickName) {
                         // 找到匹配的nick_name，替换为新数据
-                        // 需要将新数据转换为相同的格式：手机号&密码&JSON
-                        const newJsonData = typeof newMemberData === 'string' ? newMemberData : JSON.stringify(newMemberData);
-                        // 保持原来的手机号和密码部分
-                        updatedAccounts.push(`${parts[0]}&${parts[1]}&${newJsonData}`);
+                        // 保持原来的手机号和密码部分，只更新JSON部分
+                        updatedAccounts.push(`${parts[0]}&${parts[1]}&${newMemberJson}`);
                         found = true;
                         console.log(`[damember] 更新昵称为 "${nickName}" 的账号`);
+                        console.log(`[damember] 手机号: ${parts[0]}, 密码: ${parts[1]}`);
                         continue;
                     }
                 }
             } catch (e) {
                 console.log(`[damember] 解析账号${i+1}失败:`, e);
+                console.log(`[damember] 账号数据:`, account.substring(0, 100));
             }
             
             // 保留其他账号
@@ -183,8 +156,14 @@ hostname = m.aihoge.com
         
         // 自动复制当前账号数据
         if (typeof $tool !== 'undefined' && $tool.copy) {
-            $tool.copy(newMemberData);
-            console.log(`[damember] "${nickName}"的数据已复制到剪贴板`);
+            $tool.copy(newMemberJson);
+            console.log(`[damember] "${nickName}"的JSON数据已复制到剪贴板`);
         }
+        
+        // 打印调试信息
+        console.log(`[damember] BoxJS数据更新详情:`);
+        console.log(`[damember] 匹配昵称: ${nickName}`);
+        console.log(`[damember] 新JSON数据长度: ${newMemberJson.length}`);
+        console.log(`[damember] 新数据示例: ${newMemberJson.substring(0, 100)}...`);
     }
 })();
