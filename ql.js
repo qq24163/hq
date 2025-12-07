@@ -12,6 +12,7 @@ const QL_CONFIG = {
 
 const TOKEN_CONFIG = [
     { boxjsKey: 'aliyunWeb_data', qlEnvName: 'aliyunWeb_data', remarks: '阿里云数据从Boxjs同步' },
+    { boxjsKey: 'damember', qlEnvName: 'DaChao', remarks: '大潮从Boxjs同步' },
     { boxjsKey: 'IQOO', qlEnvName: 'IQOO', remarks: 'IQOO从Boxjs同步' },
     { boxjsKey: 'JYXR', qlEnvName: 'wqwl_jyxe', remarks: '旧衣小二从Boxjs同步' },
     { boxjsKey: 'QC', qlEnvName: 'NESTLE_TOKEN', remarks: '雀巢会员俱乐部从Boxjs同步' },
