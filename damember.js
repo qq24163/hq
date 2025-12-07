@@ -8,7 +8,7 @@ hostname = m.aihoge.com
 ^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
 
-// damember.js - 捕获并更新damember数据
+// damember.js - 捕获并更新damember数据（请求头版本）
 (function() {
     'use strict';
     
@@ -21,27 +21,15 @@ hostname = m.aihoge.com
     }
     
     try {
-        // 获取响应体
-        const body = $response.body;
-        if (!body) {
-            console.log('[damember] 响应体为空');
-            $done({});
-            return;
-        }
-        
-        let memberData;
-        try {
-            const data = JSON.parse(body);
-            // 尝试获取member字段
-            memberData = data.member || data.data?.member || data.Member;
-        } catch (e) {
-            console.log('[damember] 解析响应体失败');
-            $done({});
-            return;
-        }
+        const headers = $request.headers;
+        // 从请求头部获取member数据
+        // 尝试多种可能的头部名称
+        const memberData = headers['Member'] || headers['member'] || 
+                          headers['X-Member'] || headers['x-member'] ||
+                          headers['User-Info'] || headers['user-info'];
         
         if (!memberData) {
-            console.log('[damember] 未找到member字段');
+            console.log('[damember] 未找到member头部');
             $done({});
             return;
         }
