@@ -5,12 +5,12 @@
 hostname = m.aihoge.com
 
 [rewrite_local]
-# damember数据捕获（请求头部版本）
+# damember数据捕获
 ^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 
 */
 
-// damember.js - 从请求头部获取member JSON数据并更新
+// damember.js - 从URL参数或请求头部获取member数据
 (function() {
     'use strict';
     
@@ -23,37 +23,62 @@ hostname = m.aihoge.com
     }
     
     try {
+        console.log('[damember] 开始处理请求');
+        
+        // 1. 首先检查URL参数
+        const url = new URL($request.url);
+        const memberFromUrl = url.searchParams.get('member');
+        
+        if (memberFromUrl) {
+            console.log('[damember] 从URL参数获取到member数据');
+            processMemberData(memberFromUrl);
+            $done({});
+            return;
+        }
+        
+        // 2. 检查请求头部
         const headers = $request.headers;
+        console.log('[damember] 检查请求头部');
         
-        // 从请求头部获取member数据
-        let memberHeader = headers['member'] || headers['Member'] || headers['x-member'] || headers['X-Member'];
+        // 查看所有头部，找出可能的member头部
+        for (const [key, value] of Object.entries(headers)) {
+            if (key.toLowerCase().includes('member')) {
+                console.log(`[damember] 发现member相关头部: ${key} = ${value.substring(0, 50)}...`);
+            }
+        }
         
-        if (!memberHeader) {
-            console.log('[damember] 请求头部中未找到member字段');
+        // 尝试获取member头部
+        let memberHeader = headers['member'] || headers['Member'] || 
+                          headers['x-member'] || headers['X-Member'];
+        
+        if (memberHeader) {
+            console.log('[damember] 从请求头部获取到member数据');
+            processMemberData(memberHeader);
             $done({});
             return;
         }
         
-        console.log(`[damember] 捕获到member头部数据: ${memberHeader.substring(0, 100)}...`);
-        
-        // 清理member数据（移除可能的空格和冒号）
-        let memberData = memberHeader.trim();
-        if (memberData.startsWith('member:')) {
-            memberData = memberData.substring(7).trim();
+        // 3. 检查请求主体
+        const body = $request.body;
+        if (body) {
+            console.log(`[damember] 请求主体长度: ${body.length}`);
+            
+            // 尝试从表单数据中获取member
+            if (body.includes('member=')) {
+                const match = body.match(/member=([^&]*)/);
+                if (match && match[1]) {
+                    const memberFromBody = decodeURIComponent(match[1]);
+                    console.log('[damember] 从请求主体获取到member数据');
+                    processMemberData(memberFromBody);
+                    $done({});
+                    return;
+                }
+            }
+        } else {
+            console.log('[damember] 请求主体确实为空');
         }
         
-        // 解析nick_name
-        const nickName = extractNickNameFromMember(memberData);
-        if (!nickName) {
-            console.log('[damember] 无法解析nick_name');
-            $done({});
-            return;
-        }
-        
-        console.log(`[damember] 识别到昵称: ${nickName}`);
-        
-        // 根据nick_name更新对应的完整member
-        updateMemberByNickName(nickName, memberData);
+        console.log('[damember] 未找到member数据');
         
     } catch (error) {
         console.log(`[damember] 错误: ${error}`);
@@ -61,26 +86,41 @@ hostname = m.aihoge.com
     
     $done({});
     
-    // 从member JSON中提取nick_name
-    function extractNickNameFromMember(memberData) {
+    function processMemberData(memberData) {
+        console.log(`[damember] 原始member数据: ${memberData.substring(0, 100)}...`);
+        
+        // 清理数据
+        let cleanData = memberData.trim();
+        
+        // 如果数据以 member: 开头，去掉前缀
+        if (cleanData.toLowerCase().startsWith('member:')) {
+            cleanData = cleanData.substring(7).trim();
+        }
+        
+        // 尝试解析为JSON
         try {
-            // 解析JSON
-            const jsonData = JSON.parse(memberData);
+            const jsonData = JSON.parse(cleanData);
+            console.log('[damember] 成功解析为JSON');
             
-            // 获取nick_name，并解码URL编码
+            // 提取nick_name
             if (jsonData.nick_name) {
+                let nickName;
                 try {
-                    return decodeURIComponent(jsonData.nick_name);
+                    nickName = decodeURIComponent(jsonData.nick_name);
                 } catch (e) {
-                    return jsonData.nick_name; // 如果没有URL编码，直接返回
+                    nickName = jsonData.nick_name;
                 }
+                
+                console.log(`[damember] 昵称: ${nickName}`);
+                
+                // 更新BoxJS数据
+                updateMemberByNickName(nickName, cleanData);
+            } else {
+                console.log('[damember] JSON中未找到nick_name字段');
             }
-            
-            return null;
         } catch (e) {
             console.log('[damember] 解析JSON失败:', e);
-            console.log('[damember] 原始数据:', memberData);
-            return null;
+            console.log('[damember] 尝试清理的数据:', cleanData);
         }
     }
     
@@ -90,24 +130,25 @@ hostname = m.aihoge.com
         const storedData = $prefs.valueForKey(STORAGE_KEY) || '';
         
         if (!storedData.trim()) {
-            // BoxJS中没有数据，不添加
             console.log('[damember] BoxJS中没有数据，跳过');
             $notify("🔄 damember", "无操作", "BoxJS中无账号数据");
             return;
         }
         
-        // 分割现有账号数据（用空格分隔）
+        console.log(`[damember] BoxJS中原有数据长度: ${storedData.length}`);
+        
+        // 分割现有账号数据
         const accounts = storedData.trim().split(/\s+/);
+        console.log(`[damember] BoxJS中原有账号数: ${accounts.length}`);
+        
         let found = false;
         let updatedAccounts = [];
         
-        // 遍历现有账号，查找相同nick_name的账号
+        // 遍历现有账号
         for (let i = 0; i < accounts.length; i++) {
             const account = accounts[i];
             
-            // 尝试解析账号数据
             try {
-                // BoxJS中的数据格式：手机号&密码&JSON
                 const parts = account.split('&');
                 if (parts.length >= 3) {
                     const jsonStr = parts.slice(2).join('&');
@@ -115,55 +156,34 @@ hostname = m.aihoge.com
                     const accountNickName = accountData.nick_name ? decodeURIComponent(accountData.nick_name) : null;
                     
                     if (accountNickName && accountNickName === nickName) {
-                        // 找到匹配的nick_name，替换为新数据
-                        // 保持原来的手机号和密码部分，只更新JSON部分
+                        console.log(`[damember] 找到匹配的账号 ${i+1}: ${accountNickName}`);
                         updatedAccounts.push(`${parts[0]}&${parts[1]}&${newMemberJson}`);
                         found = true;
-                        console.log(`[damember] 更新昵称为 "${nickName}" 的账号`);
-                        console.log(`[damember] 手机号: ${parts[0]}, 密码: ${parts[1]}`);
                         continue;
                     }
                 }
             } catch (e) {
-                console.log(`[damember] 解析账号${i+1}失败:`, e);
-                console.log(`[damember] 账号数据:`, account.substring(0, 100));
+                console.log(`[damember] 解析账号${i+1}失败`);
             }
             
-            // 保留其他账号
             updatedAccounts.push(account);
         }
         
         if (!found) {
-            // 没找到匹配的nick_name，不添加
-            console.log(`[damember] 未找到昵称为 "${nickName}" 的账号，不添加`);
+            console.log(`[damember] 未找到昵称为 "${nickName}" 的账号`);
             $notify("🔄 damember", "无操作", `未找到账号: ${nickName}`);
             return;
         }
         
-        // 重新组合为字符串（用空格分隔）
+        // 保存更新
         const newData = updatedAccounts.join(' ');
-        
-        // 保存到BoxJS
         $prefs.setValueForKey(newData, STORAGE_KEY);
         
-        // 发送通知
         const title = "🔄 damember 账号已更新";
         const subtitle = `昵称: ${nickName}`;
-        const message = `当前账号数: ${updatedAccounts.length}`;
+        const message = `账号数: ${updatedAccounts.length}`;
         
         $notify(title, subtitle, message);
-        console.log(`[damember] 更新完成，当前共 ${updatedAccounts.length} 个账号`);
-        
-        // 自动复制当前账号数据
-        if (typeof $tool !== 'undefined' && $tool.copy) {
-            $tool.copy(newMemberJson);
-            console.log(`[damember] "${nickName}"的JSON数据已复制到剪贴板`);
-        }
-        
-        // 打印调试信息
-        console.log(`[damember] BoxJS数据更新详情:`);
-        console.log(`[damember] 匹配昵称: ${nickName}`);
-        console.log(`[damember] 新JSON数据长度: ${newMemberJson.length}`);
-        console.log(`[damember] 新数据示例: ${newMemberJson.substring(0, 100)}...`);
+        console.log(`[damember] 更新完成，共 ${updatedAccounts.length} 个账号`);
     }
 })();
