@@ -5,10 +5,12 @@
 hostname = m.aihoge.com
 
 [rewrite_local]
-^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
+# damember数据捕获（请求主体版本）
+^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
+
 */
 
-// damember.js - 根据nick_name更新对应的完整member数据
+// damember.js - 根据nick_name更新对应的完整member数据（JSON格式）
 (function() {
     'use strict';
     
@@ -21,36 +23,46 @@ hostname = m.aihoge.com
     }
     
     try {
-        // 1. 从URL参数获取member
-        const url = new URL($request.url);
-        let memberData = url.searchParams.get('member');
-        
-        // 2. 如果URL中没有，尝试从请求头部获取
-        if (!memberData) {
-            const headers = $request.headers;
-            memberData = headers['Member'] || headers['member'] || 
-                        headers['X-Member'] || headers['x-member'] ||
-                        headers['User-Info'] || headers['user-info'];
-        }
-        
-        // 3. 如果头部没有，尝试从请求主体获取
-        if (!memberData && $request.body) {
-            const bodyStr = $request.body;
-            if (bodyStr.includes('member=')) {
-                const match = bodyStr.match(/member=([^&]*)/);
-                if (match && match[1]) {
-                    memberData = decodeURIComponent(match[1]);
-                }
-            }
-        }
-        
-        if (!memberData) {
-            console.log('[damember] 未找到member数据');
+        // 获取请求主体
+        const body = $request.body;
+        if (!body) {
+            console.log('[damember] 请求主体为空');
             $done({});
             return;
         }
         
-        console.log(`[damember] 捕获到完整member数据，长度: ${memberData.length}`);
+        console.log(`[damember] 请求主体: ${body.substring(0, 100)}...`);
+        
+        // 解析请求主体
+        let memberData = null;
+        
+        // 方法1：尝试从表单数据中获取member参数
+        if (body.includes('member=')) {
+            const match = body.match(/member=([^&]*)/);
+            if (match && match[1]) {
+                memberData = decodeURIComponent(match[1]);
+            }
+        }
+        
+        // 方法2：尝试直接解析为JSON（如果是application/json格式）
+        if (!memberData) {
+            try {
+                const jsonData = JSON.parse(body);
+                if (jsonData.member) {
+                    memberData = typeof jsonData.member === 'string' ? jsonData.member : JSON.stringify(jsonData.member);
+                }
+            } catch (e) {
+                // 不是JSON格式
+            }
+        }
+        
+        if (!memberData) {
+            console.log('[damember] 无法从请求主体中提取member数据');
+            $done({});
+            return;
+        }
+        
+        console.log(`[damember] 提取到member数据: ${memberData.substring(0, 100)}...`);
         
         // 解析nick_name
         const nickName = extractNickNameFromMember(memberData);
@@ -71,18 +83,17 @@ hostname = m.aihoge.com
     
     $done({});
     
-    // 从member数据中提取nick_name
+    // 从member JSON中提取nick_name
     function extractNickNameFromMember(memberData) {
         try {
-            // member格式：手机号&密码&JSON数据
-            const parts = memberData.split('&');
-            if (parts.length < 3) return null;
+            let jsonData;
             
-            // 获取JSON部分（从第三个&开始）
-            const jsonStr = parts.slice(2).join('&');
-            
-            // 解析JSON
-            const jsonData = JSON.parse(jsonStr);
+            // 尝试直接解析为JSON
+            if (typeof memberData === 'string') {
+                jsonData = JSON.parse(memberData);
+            } else {
+                jsonData = memberData;
+            }
             
             // 获取nick_name，并解码URL编码
             if (jsonData.nick_name) {
@@ -118,18 +129,35 @@ hostname = m.aihoge.com
         let updatedAccounts = [];
         
         // 遍历现有账号，查找相同nick_name的账号
-        for (let account of accounts) {
-            const accountNickName = extractNickNameFromMember(account);
+        for (let i = 0; i < accounts.length; i++) {
+            const account = accounts[i];
             
-            if (accountNickName && accountNickName === nickName) {
-                // 找到匹配的nick_name，替换为新数据
-                updatedAccounts.push(newMemberData);
-                found = true;
-                console.log(`[damember] 更新昵称为 "${nickName}" 的账号`);
-            } else {
-                // 保留其他账号
-                updatedAccounts.push(account);
+            // 尝试解析账号数据
+            try {
+                // 你的示例数据格式是：手机号&密码&JSON
+                const parts = account.split('&');
+                if (parts.length >= 3) {
+                    const jsonStr = parts.slice(2).join('&');
+                    const accountData = JSON.parse(jsonStr);
+                    const accountNickName = accountData.nick_name ? decodeURIComponent(accountData.nick_name) : null;
+                    
+                    if (accountNickName && accountNickName === nickName) {
+                        // 找到匹配的nick_name，替换为新数据
+                        // 需要将新数据转换为相同的格式：手机号&密码&JSON
+                        const newJsonData = typeof newMemberData === 'string' ? newMemberData : JSON.stringify(newMemberData);
+                        // 保持原来的手机号和密码部分
+                        updatedAccounts.push(`${parts[0]}&${parts[1]}&${newJsonData}`);
+                        found = true;
+                        console.log(`[damember] 更新昵称为 "${nickName}" 的账号`);
+                        continue;
+                    }
+                }
+            } catch (e) {
+                console.log(`[damember] 解析账号${i+1}失败:`, e);
             }
+            
+            // 保留其他账号
+            updatedAccounts.push(account);
         }
         
         if (!found) {
