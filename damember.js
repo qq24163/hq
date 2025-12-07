@@ -8,187 +8,113 @@ hostname = m.aihoge.com
 ^https:\/\/m\.aihoge\.com\/api\/memberhy\/h5\/js\/signature url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
 
-// auto-update-damember.js - 精确匹配更新
-const memberHeader = $request.headers?.["member"];
-
-if (memberHeader) {
-    console.log("🚀 脚本启动 - 开始处理member数据");
+// damember.js - 捕获并更新damember数据
+(function() {
+    'use strict';
+    
+    const TARGET_URL = 'https://m.aihoge.com/api/memberhy/h5/js/signature';
+    
+    // 检查是否是目标URL
+    if (!$request || !$request.url.includes(TARGET_URL)) {
+        $done({});
+        return;
+    }
     
     try {
-        // 1. 解析抓包数据
-        const parts = memberHeader.split('&');
-        console.log(`📊 原始数据分割: ${parts.length} 部分`);
-        
-        if (parts.length < 3) {
-            console.log("❌ 数据格式错误");
+        // 获取响应体
+        const body = $response.body;
+        if (!body) {
+            console.log('[damember] 响应体为空');
             $done({});
             return;
         }
         
-        const currentPhone = parts[0].trim();
-        const currentQQ = parts[1].trim();
-        const jsonStr = parts.slice(2).join('&');
-        
-        console.log(`📱 抓包手机号: ${currentPhone}`);
-        console.log(`💬 抓包QQ: ${currentQQ}`);
-        
-        let currentMember;
+        let memberData;
         try {
-            currentMember = JSON.parse(jsonStr);
-            console.log(`🎯 抓包mark: ${currentMember.mark || '无'}`);
-            console.log(`👤 抓包昵称: ${currentMember.nick_name || '无'}`);
+            const data = JSON.parse(body);
+            // 尝试获取member字段
+            memberData = data.member || data.data?.member || data.Member;
         } catch (e) {
-            console.log(`❌ JSON解析失败: ${e.message}`);
+            console.log('[damember] 解析响应体失败');
             $done({});
             return;
         }
         
-        // 2. 从BoxJS读取damember数据
-        const batchData = $prefs.valueForKey('damember');
-        console.log(`📦 BoxJS damember数据: ${batchData ? '存在' : '不存在'}`);
-        
-        if (!batchData || batchData.trim() === '') {
-            console.log("❌ BoxJS中damember数据为空");
-            $notify("❌ 数据缺失", "BoxJS中damember数据为空", "请先设置数据");
+        if (!memberData) {
+            console.log('[damember] 未找到member字段');
             $done({});
             return;
         }
         
-        // 3. 分割批量数据（你的数据是用单个空格分隔的）
-        // 注意：这里使用正则分割，处理多个空格情况
-        const batchItems = batchData.split(/\s+/).filter(item => item.trim().length > 0);
-        console.log(`📋 批量数据账号数: ${batchItems.length}`);
+        console.log(`[damember] 捕获到member数据: ${memberData.substring(0, 30)}...`);
         
-        let updatedData = '';
-        let foundMatch = false;
-        let matchType = '';
-        let matchedPhone = '';
-        
-        // 4. 遍历所有账号，进行匹配和更新
-        for (let i = 0; i < batchItems.length; i++) {
-            const item = batchItems[i];
-            const itemParts = item.split('&');
-            
-            if (itemParts.length < 3) {
-                // 格式不正确，保留原样
-                updatedData += (updatedData ? ' ' : '') + item;
-                continue;
-            }
-            
-            const itemPhone = itemParts[0].trim();
-            const itemQQ = itemParts[1].trim();
-            const itemJsonStr = itemParts.slice(2).join('&');
-            
-            let itemMember;
-            try {
-                itemMember = JSON.parse(itemJsonStr);
-            } catch (e) {
-                // 解析失败，保留原样
-                updatedData += (updatedData ? ' ' : '') + item;
-                continue;
-            }
-            
-            // 5. 核心匹配逻辑
-            let shouldUpdate = false;
-            
-            // 情况1: 手机号完全匹配
-            if (itemPhone === currentPhone) {
-                console.log(`✅ 手机号匹配: ${itemPhone} == ${currentPhone}`);
-                shouldUpdate = true;
-                matchType = '手机号匹配';
-                matchedPhone = itemPhone;
-                foundMatch = true;
-            }
-            // 情况2: mark匹配（如果手机号不同但mark相同）
-            else if (itemMember.mark && currentMember.mark && itemMember.mark === currentMember.mark) {
-                console.log(`✅ mark匹配: ${itemMember.mark} == ${currentMember.mark}`);
-                shouldUpdate = true;
-                matchType = 'mark匹配';
-                matchedPhone = itemPhone;
-                foundMatch = true;
-            }
-            
-            if (shouldUpdate) {
-                console.log(`🔄 正在更新账号: ${itemPhone}`);
-                
-                // 创建更新后的member对象
-                // 注意：保留所有原始字段，用抓包数据覆盖
-                const updatedMember = {
-                    ...itemMember,      // 原始数据
-                    ...currentMember,   // 抓包数据覆盖
-                    // 确保关键字段
-                    mark: currentMember.mark || itemMember.mark,
-                    nick_name: currentMember.nick_name || itemMember.nick_name,
-                    id: currentMember.id || itemMember.id,
-                    token: currentMember.token || itemMember.token,
-                    btoken: currentMember.btoken || itemMember.btoken,
-                    mtoken: currentMember.mtoken || itemMember.mtoken,
-                    stoken: currentMember.stoken || itemMember.stoken,
-                    expire: currentMember.expire || itemMember.expire
-                };
-                
-                // 重新构建条目（保持phone和qq不变）
-                const updatedItem = `${itemPhone}&${itemQQ}&${JSON.stringify(updatedMember)}`;
-                updatedData += (updatedData ? ' ' : '') + updatedItem;
-                
-                console.log(`✅ 账号 ${itemPhone} 已更新`);
-                
-            } else {
-                // 不匹配，保留原数据
-                updatedData += (updatedData ? ' ' : '') + item;
-            }
+        // 解析member数据，格式：手机号&密码&JSON数据
+        const parts = memberData.split('&');
+        if (parts.length < 3) {
+            console.log('[damember] member数据格式不正确');
+            $done({});
+            return;
         }
         
-        // 6. 保存更新后的数据
-        if (foundMatch) {
-            // 保存到BoxJS
-            $prefs.setValueForKey(updatedData, 'damember');
-            console.log(`💾 已更新BoxJS damember数据`);
-            
-            // 解码昵称用于显示
-            let displayName = currentMember.nick_name || '未知';
-            try {
-                displayName = decodeURIComponent(currentMember.nick_name);
-            } catch (e) {}
-            
-            // 发送通知
-            $notify(
-                "✅ damember数据已更新",
-                `${matchType}: ${matchedPhone}`,
-                `昵称: ${displayName}\n账号数: ${batchItems.length}`
-            );
-            
-            // 复制更新后的数据到剪贴板
-            $tool.copy(updatedData);
-            console.log(`📋 已复制更新后的数据到剪贴板`);
-            
-        } else {
-            console.log(`❌ 未找到匹配账号`);
-            console.log(`抓包手机号: ${currentPhone}`);
-            console.log(`抓包mark: ${currentMember.mark}`);
-            
-            // 显示所有账号的手机号用于对比
-            console.log(`批量数据中的手机号:`);
-            batchItems.slice(0, 3).forEach((item, idx) => {
-                const phone = item.split('&')[0];
-                console.log(`  ${idx + 1}. ${phone}`);
-            });
-            
-            $notify(
-                "⚠️ 未找到匹配",
-                `抓包: ${currentPhone}`,
-                `批量数据中有 ${batchItems.length} 个账号\n请检查手机号是否一致`
-            );
-        }
+        const phoneNumber = parts[0]; // 手机号
+        const password = parts[1];    // 密码
+        const jsonData = parts.slice(2).join('&'); // JSON数据部分
         
-        console.log("🎉 脚本执行完成");
+        console.log(`[damember] 手机号: ${phoneNumber}`);
         
-    } catch (e) {
-        console.log(`💥 脚本错误: ${e.message}`);
-        $notify("❌ 脚本错误", e.message, "");
+        // 管理多账号
+        updateDamemberData(phoneNumber, memberData);
+        
+    } catch (error) {
+        console.log(`[damember] 错误: ${error}`);
     }
-} else {
-    console.log("📭 未检测到member请求头");
-}
-
-$done({});
+    
+    $done({});
+    
+    function updateDamemberData(phoneNumber, newMemberData) {
+        const STORAGE_KEY = 'damember';
+        const storedData = $prefs.valueForKey(STORAGE_KEY) || '';
+        let dataArray = storedData ? storedData.split(' ').filter(d => d.trim() !== '') : [];
+        
+        // 检查是否已存在相同手机号
+        let isNewData = true;
+        let existingIndex = -1;
+        
+        // 遍历现有数据检查重复
+        for (let i = 0; i < dataArray.length; i++) {
+            const existingPhoneNumber = dataArray[i].split('&')[0];
+            if (existingPhoneNumber === phoneNumber) {
+                isNewData = false;
+                existingIndex = i;
+                break;
+            }
+        }
+        
+        if (isNewData) {
+            // 新账号，添加到数组
+            dataArray.push(newMemberData);
+            
+            // 保存到BoxJS
+            $prefs.setValueForKey(dataArray.join(' '), STORAGE_KEY);
+        } else {
+            // 更新已有账号
+            dataArray[existingIndex] = newMemberData;
+            
+            // 保存到BoxJS
+            $prefs.setValueForKey(dataArray.join(' '), STORAGE_KEY);
+        }
+        
+        // 发送精简通知
+        const title = isNewData ? "✅ damember 数据已添加" : "🔄 damember 数据已更新";
+        const subtitle = `手机号: ${phoneNumber}`;
+        const message = `账号数: ${dataArray.length}`;
+        
+        $notify(title, subtitle, message);
+        
+        // 自动复制当前member数据
+        if (typeof $tool !== 'undefined' && $tool.copy) {
+            $tool.copy(newMemberData);
+            console.log('[damember] member数据已复制到剪贴板');
+        }
+    }
+})();
