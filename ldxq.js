@@ -5,40 +5,96 @@
 hostname = lvdong.fzjingzhou.com
 
 [rewrite_local]
-^https:\/\/lvdong\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/ldxq.js
+# LVXQ token捕获
+^https:\/\/lvdong\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/lvxq.js
 */
-// capture-ldxqtoken-session.js - 捕获getWxMiniProgramSessionKey接口的token
-const url = $request.url;
-
-if (url.includes('lvdong.fzjingzhou.com/api/login/getWxMiniProgramSessionKey') && $request.body) {
-    try {
-        const params = new URLSearchParams($request.body);
-        const token = params.get('token');
-        
-        if (token) {
-            // 保存当前token
-            $prefs.setValueForKey(token, 'ldxqtoken_current');
-            
-            // 多账号管理
-            let allTokens = ($prefs.valueForKey('LDXQTOKEN') || '').split('&').filter(t => t);
-            if (!allTokens.includes(token)) {
-                if (allTokens.length >= 10) allTokens.shift();
-                allTokens.push(token);
-                $prefs.setValueForKey(allTokens.join('&'), 'LDXQTOKEN');
-            }
-            
-            // 单条通知
-            $notify(
-                '📱 LDXQTOKEN',
-                `账号${allTokens.length}个`,
-                token.substring(0, 15) + '...'
-            );
-            
-            $tool.copy(token);
-        }
-    } catch (e) {
-        console.log('[LDXQTOKEN Error] ' + e);
+// lvxq.js - 捕获LVXQ token并管理多账号
+(function() {
+    'use strict';
+    
+    const TARGET_URL = 'https://lvdong.fzjingzhou.com/api/login/getWxMiniProgramSessionKey';
+    
+    // 检查是否是目标URL
+    if (!$request || !$request.url.includes(TARGET_URL)) {
+        $done({});
+        return;
     }
-}
-
-$done({});
+    
+    try {
+        // 获取请求主体
+        const body = $request.body;
+        if (!body) {
+            console.log('[LVXQ] 请求主体为空');
+            $done({});
+            return;
+        }
+        
+        console.log(`[LVXQ] 请求主体: ${body.substring(0, 100)}...`);
+        
+        let token = '';
+        
+        // 解析表单数据
+        if (body.includes('token=')) {
+            const match = body.match(/token=([^&]*)/);
+            if (match && match[1]) {
+                token = match[1];
+            }
+        }
+        
+        if (!token) {
+            console.log('[LVXQ] 未找到token参数');
+            $done({});
+            return;
+        }
+        
+        console.log(`[LVXQ] 捕获到token: ${token}`);
+        
+        // 管理多账号
+        manageLvxqTokens(token);
+        
+    } catch (error) {
+        console.log(`[LVXQ] 错误: ${error}`);
+    }
+    
+    $done({});
+    
+    function manageLvxqTokens(newToken) {
+        const STORAGE_KEY = 'lvxq';
+        const storedTokens = $prefs.valueForKey(STORAGE_KEY) || '';
+        let tokensArray = storedTokens ? storedTokens.split('&').filter(t => t.trim() !== '') : [];
+        
+        // 检查是否已存在相同token
+        let isNewToken = true;
+        let accountNumber = tokensArray.length + 1;
+        
+        // 遍历现有token检查重复
+        for (let i = 0; i < tokensArray.length; i++) {
+            if (tokensArray[i] === newToken) {
+                isNewToken = false;
+                accountNumber = i + 1;
+                break;
+            }
+        }
+        
+        if (isNewToken) {
+            // 新token，添加到数组
+            tokensArray.push(newToken);
+            
+            // 保存到BoxJS，用&分隔
+            $prefs.setValueForKey(tokensArray.join('&'), STORAGE_KEY);
+        }
+        
+        // 发送精简通知
+        const title = isNewToken ? "✅ LVXQ token已添加" : "🔄 LVXQ token已存在";
+        const subtitle = `账号${accountNumber}`;
+        const message = `Token: ${newToken.substring(0, 15)}...`;
+        
+        $notify(title, subtitle, message);
+        
+        // 自动复制当前token
+        if (typeof $tool !== 'undefined' && $tool.copy) {
+            $tool.copy(newToken);
+            console.log('[LVXQ] token已复制到剪贴板');
+        }
+    }
+})();
