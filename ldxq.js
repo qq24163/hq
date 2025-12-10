@@ -6,7 +6,7 @@ hostname = lvdong.fzjingzhou.com
 
 [rewrite_local]
 # LVXQ token捕获
-^https:\/\/lvdong\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/lvxq.js
+^https:\/\/lvdong\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/ldxq.js
 */
 // lvxq.js - 捕获LVXQ token并管理多账号
 (function() {
