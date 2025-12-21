@@ -5,14 +5,14 @@
 hostname = jiuyixiaoer.fzjingzhou.com
 
 [rewrite_local]
-# JYXR scoreList接口Token捕获
-^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/jyxr.js
+# JYXR sign接口Token捕获（请求主体版本）
+^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/Person\/sign url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/jyxr.js
 */
-// jyxr.js - 捕获JYXR Token并管理多账号（请求主体版本）
+// jyxr_sign.js - 捕获JYXR sign接口请求主体中的token
 (function() {
     'use strict';
     
-    const TARGET_URL = 'https://jiuyixiaoer.fzjingzhou.com/api/login/getWxMiniProgramSessionKey';
+    const TARGET_URL = 'https://jiuyixiaoer.fzjingzhou.com/api/Person/sign';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
@@ -24,10 +24,12 @@ hostname = jiuyixiaoer.fzjingzhou.com
         // 获取请求主体
         const body = $request.body;
         if (!body) {
-            console.log('[JYXR] 请求主体为空');
+            console.log('[JYXR_SIGN] 请求主体为空');
             $done({});
             return;
         }
+        
+        console.log(`[JYXR_SIGN] 请求主体: ${body.substring(0, 100)}...`);
         
         let token = '';
         
@@ -40,18 +42,18 @@ hostname = jiuyixiaoer.fzjingzhou.com
         }
         
         if (!token) {
-            console.log('[JYXR] 未找到token参数');
+            console.log('[JYXR_SIGN] 未找到token参数');
             $done({});
             return;
         }
         
-        console.log(`[JYXR] 捕获到Token: ${token}`);
+        console.log(`[JYXR_SIGN] 捕获到Token: ${token}`);
         
         // 管理多账号
         manageJyxrTokens(token);
         
     } catch (error) {
-        console.log(`[JYXR] 错误: ${error}`);
+        console.log(`[JYXR_SIGN] 错误: ${error}`);
     }
     
     $done({});
@@ -93,7 +95,7 @@ hostname = jiuyixiaoer.fzjingzhou.com
         // 自动复制当前token
         if (typeof $tool !== 'undefined' && $tool.copy) {
             $tool.copy(newToken);
-            console.log('[JYXR] Token已复制到剪贴板');
+            console.log('[JYXR_SIGN] Token已复制到剪贴板');
         }
     }
 })();
