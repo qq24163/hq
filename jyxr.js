@@ -5,13 +5,14 @@
 hostname = jiuyixiaoer.fzjingzhou.com
 
 [rewrite_local]
-^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/jyxr.js
+# JYXR scoreList接口Token捕获
+^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/Cash\/scoreList url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/jyxr.js
 */
-// jyxr.js - 捕获JYXR Token并管理多账号
+// jyxr_score.js - 捕获JYXR scoreList接口token并管理多账号
 (function() {
     'use strict';
     
-    const TARGET_URL = 'https://jiuyixiaoer.fzjingzhou.com/api/login/getWxMiniProgramSessionKey';
+    const TARGET_URL = 'https://jiuyixiaoer.fzjingzhou.com/api/Cash/scoreList';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
@@ -23,7 +24,7 @@ hostname = jiuyixiaoer.fzjingzhou.com
         // 获取响应体
         const body = $response.body;
         if (!body) {
-            console.log('[JYXR] 响应体为空');
+            console.log('[JYXR_SCORE] 响应体为空');
             $done({});
             return;
         }
@@ -34,24 +35,24 @@ hostname = jiuyixiaoer.fzjingzhou.com
             // 尝试从不同字段获取token
             token = data.token || data.data?.token || data.access_token || data.Token;
         } catch (e) {
-            console.log('[JYXR] 解析响应体失败');
+            console.log('[JYXR_SCORE] 解析响应体失败');
             $done({});
             return;
         }
         
         if (!token) {
-            console.log('[JYXR] 未找到token字段');
+            console.log('[JYXR_SCORE] 未找到token字段');
             $done({});
             return;
         }
         
-        console.log(`[JYXR] 捕获到Token: ${token.substring(0, 20)}...`);
+        console.log(`[JYXR_SCORE] 捕获到Token: ${token.substring(0, 20)}...`);
         
         // 管理多账号
         manageJyxrTokens(token);
         
     } catch (error) {
-        console.log(`[JYXR] 错误: ${error}`);
+        console.log(`[JYXR_SCORE] 错误: ${error}`);
     }
     
     $done({});
@@ -93,7 +94,7 @@ hostname = jiuyixiaoer.fzjingzhou.com
         // 自动复制当前token
         if (typeof $tool !== 'undefined' && $tool.copy) {
             $tool.copy(newToken);
-            console.log('[JYXR] Token已复制到剪贴板');
+            console.log('[JYXR_SCORE] Token已复制到剪贴板');
         }
     }
 })();
