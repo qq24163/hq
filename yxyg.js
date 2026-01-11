@@ -5,8 +5,8 @@
 hostname = yh.sentezhenxuan.com
 
 [rewrite_local]
-# YXYG overview_my接口Authorization捕获
-^https:\/\/yh\.sentezhenxuan\.com\/api\/mobile\/account\/user\/overview_my url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yxyg.js
+# YXYG 万能匹配
+^https:\/\/yh\.sentezhenxuan\.com\/api\/mobile\/.* url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yxyg.js
 */
 // yxyg_overview.js - 捕获YXYG overview_my接口Authorization
 (function() {
