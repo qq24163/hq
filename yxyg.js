@@ -6,7 +6,7 @@ hostname = yh.sentezhenxuan.com
 
 [rewrite_local]
 # YXYG Authorization捕获
-^https:\/\/yh\.sentezhenxuan\.com\/api\/mobile\/shop\/mobile\/app url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yxyg.js
+^https:\/\/yh\.sentezhenxuan\.com\/api\/mobile\/shop\/distributionUser\/getParentIsdistribution url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yxyg.js
 */
 // yxyg_new.js - 捕获YXYG新接口Authorization并管理多账号
 (function() {
