@@ -8,11 +8,11 @@ hostname = yh.sentezhenxuan.com
 # YXYG Authorization捕获
 ^https:\/\/yh\.sentezhenxuan\.com\/api\/mobile\/shop\/mobile\/app url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yxyg.js
 */
-// yxyg.js - 捕获YXYG Authorization并管理多账号
+// yxyg_new.js - 捕获YXYG新接口Authorization并管理多账号
 (function() {
     'use strict';
     
-    const TARGET_URL = 'https://yh.sentezhenxuan.com/api/mobile/shop/mobile/app';
+    const TARGET_URL = 'https://yh.sentezhenxuan.com/api/mobile/shop/distributionUser/getParentIsdistribution';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
@@ -25,7 +25,7 @@ hostname = yh.sentezhenxuan.com
         let authorization = headers['Authorization'] || headers['authorization'];
         
         if (!authorization) {
-            console.log('[YXYG] 未找到Authorization头部');
+            console.log('[YXYG_NEW] 未找到Authorization头部');
             $done({});
             return;
         }
@@ -35,13 +35,13 @@ hostname = yh.sentezhenxuan.com
             authorization = authorization.substring(7);
         }
         
-        console.log(`[YXYG] 捕获到Authorization: ${authorization.substring(0, 20)}...`);
+        console.log(`[YXYG_NEW] 捕获到Authorization: ${authorization.substring(0, 20)}...`);
         
         // 管理多账号
         manageYxygTokens(authorization);
         
     } catch (error) {
-        console.log(`[YXYG] 错误: ${error}`);
+        console.log(`[YXYG_NEW] 错误: ${error}`);
     }
     
     $done({});
@@ -83,7 +83,7 @@ hostname = yh.sentezhenxuan.com
         // 自动复制当前token
         if (typeof $tool !== 'undefined' && $tool.copy) {
             $tool.copy(newToken);
-            console.log('[YXYG] Token已复制到剪贴板');
+            console.log('[YXYG_NEW] Token已复制到剪贴板');
         }
     }
 })();
