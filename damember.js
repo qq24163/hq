@@ -6,15 +6,14 @@ hostname = m.aihoge.com
 
 [rewrite_local]
 # damember数据捕获
-^https:\/\/m\.aihoge\.com\/api\/publichy\/client\/activity\/info url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
-
+^https:\/\/m\.aihoge\.com\/api\/lotteryhy\/api\/client\/cj\/send\/pak url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/damember.js
 */
 
 // damember.js - 从URL参数或请求头部获取member数据
 (function() {
     'use strict';
     
-    const TARGET_URL = 'https://m.aihoge.com/api/publichy/client/activity/info';
+    const TARGET_URL = 'https://m.aihoge.com/api/lotteryhy/api/client/cj/send/pak';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
