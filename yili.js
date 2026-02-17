@@ -7,7 +7,7 @@ hostname = msmarket.msx.digitalyili.com
 ^https:\/\/msmarket\.msx\.digitalyili\.com\/gateway\/api\/auth\/account\/user\/info url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yili.js
 
 # 伊利 - 处理响应体获取用户信息
-^https:\/\/msmarket\.msx\.digitalyili\.com\/gateway\/api\/auth\/account\/user\/info url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yili_response.js
+^https:\/\/msmarket\.msx\.digitalyili\.com\/gateway\/api\/auth\/account\/user\/info url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/yili.js
 */
 // yili_combined.js - 伊利账号捕获合并版
 (function() {
