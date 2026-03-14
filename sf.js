@@ -6,7 +6,7 @@ hostname = mcs-mimp-web.sf-express.com
 # 顺丰活动完整URL捕获（换行分隔）
 ^https:\/\/mcs-mimp-web\.sf-express\.com\/mcs-mimp\/share\/weChat\/activityRedirect url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sf.js
 */
-// sf_url.js - 捕获顺丰活动完整URL并管理多账号（换行分隔，最新替换旧版）
+// sf_url.js - 捕获顺丰活动完整URL，基于unionId管理多账号
 (function() {
     'use strict';
     
@@ -23,25 +23,28 @@ hostname = mcs-mimp-web.sf-express.com
         const fullUrl = $request.url;
         
         console.log(`[SF] 捕获到完整URL，长度: ${fullUrl.length}`);
-        console.log(`[SF] URL预览: ${fullUrl.substring(0, 100)}...`);
         
-        // 从URL中提取unionId作为账号唯一标识
-        let accountId = 'unknown';
+        // 从URL中提取unionId作为唯一标识
+        let unionId = '';
         try {
             const urlObj = new URL(fullUrl);
-            // 优先使用unionId作为唯一标识，如果不存在则尝试其他参数
-            accountId = urlObj.searchParams.get('unionId') || 
-                       urlObj.searchParams.get('openId') || 
-                       urlObj.searchParams.get('memId') || 
-                       urlObj.searchParams.get('mobile') ||
-                       'unknown';
-            console.log(`[SF] 账号标识: ${accountId.substring(0, 20)}...`);
+            unionId = urlObj.searchParams.get('unionId');
+            
+            if (!unionId) {
+                console.log('[SF] URL中未找到unionId参数');
+                $done({});
+                return;
+            }
+            
+            console.log(`[SF] 提取到unionId: ${unionId.substring(0, 30)}...`);
         } catch (e) {
-            console.log('[SF] 解析URL参数失败');
+            console.log('[SF] 解析URL失败:', e);
+            $done({});
+            return;
         }
         
         // 管理多账号
-        manageSfUrls(accountId, fullUrl);
+        manageSfUrls(unionId, fullUrl);
         
     } catch (error) {
         console.log(`[SF] 错误: ${error}`);
@@ -49,41 +52,48 @@ hostname = mcs-mimp-web.sf-express.com
     
     $done({});
     
-    function manageSfUrls(accountId, newUrl) {
+    function manageSfUrls(unionId, newUrl) {
         const STORAGE_KEY = 'sf';
         const storedUrls = $prefs.valueForKey(STORAGE_KEY) || '';
         let urlsArray = storedUrls ? storedUrls.split('\n').filter(u => u.trim() !== '') : [];
         
-        // 检查是否已存在相同accountId的URL
-        let isNewAccount = true;
+        // 查找是否已存在相同unionId的URL
         let existingIndex = -1;
         
-        // 遍历现有URL，查找相同账号标识的条目
         for (let i = 0; i < urlsArray.length; i++) {
-            // 检查当前URL是否包含相同的accountId
-            if (accountId !== 'unknown' && urlsArray[i].includes(accountId)) {
-                isNewAccount = false;
-                existingIndex = i;
-                break;
+            // 从存储的URL中提取unionId进行比较
+            try {
+                const urlObj = new URL(urlsArray[i]);
+                const storedUnionId = urlObj.searchParams.get('unionId');
+                
+                if (storedUnionId === unionId) {
+                    existingIndex = i;
+                    console.log(`[SF] 找到相同unionId的旧URL，索引: ${i}`);
+                    break;
+                }
+            } catch (e) {
+                // 如果解析失败，跳过这条记录
+                console.log(`[SF] 解析存储URL失败，跳过索引: ${i}`);
+                continue;
             }
         }
         
-        if (isNewAccount) {
-            // 新账号，添加到数组末尾
+        if (existingIndex === -1) {
+            // 新unionId，添加到数组末尾
             urlsArray.push(newUrl);
-            console.log(`[SF] 添加新账号，当前总数: ${urlsArray.length}`);
+            console.log(`[SF] 添加新unionId账号，当前总数: ${urlsArray.length}`);
         } else {
-            // 已有账号，替换旧数据（最新的替换以前的）
+            // 已存在unionId，替换旧URL（最新的替换以前的）
             urlsArray[existingIndex] = newUrl;
-            console.log(`[SF] 更新已有账号，索引: ${existingIndex}`);
+            console.log(`[SF] 更新已有unionId账号，索引: ${existingIndex}`);
         }
         
         // 保存到BoxJS，用换行分隔
         $prefs.setValueForKey(urlsArray.join('\n'), STORAGE_KEY);
         
         // 发送精简通知
-        const title = isNewAccount ? "✅ SF活动链接已添加" : "🔄 SF活动链接已更新";
-        const subtitle = `账号: ${accountId.substring(0, 15)}...`;
+        const title = existingIndex === -1 ? "✅ SF活动链接已添加" : "🔄 SF活动链接已更新";
+        const subtitle = `unionId: ${unionId.substring(0, 15)}...`;
         const message = `当前账号数: ${urlsArray.length}`;
         
         $notify(title, subtitle, message);
@@ -94,7 +104,6 @@ hostname = mcs-mimp-web.sf-express.com
             console.log('[SF] 完整URL已复制到剪贴板');
         }
         
-        // 打印当前所有账号数量
         console.log(`[SF] 当前共 ${urlsArray.length} 个账号`);
     }
 })();
