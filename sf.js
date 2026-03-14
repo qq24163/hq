@@ -50,7 +50,7 @@ hostname = mcs-mimp-web.sf-express.com
     function manageSfUrls(accountId, newUrl) {
         const STORAGE_KEY = 'sf';
         const storedUrls = $prefs.valueForKey(STORAGE_KEY) || '';
-        let urlsArray = storedUrls ? storedUrls.split('&').filter(u => u.trim() !== '') : [];
+        let urlsArray = storedUrls ? storedUrls.split('#').filter(u => u.trim() !== '') : [];
         
         // 检查是否已存在相同accountId的URL
         let isNewUrl = true;
