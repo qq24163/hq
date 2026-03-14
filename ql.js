@@ -16,7 +16,7 @@ const TOKEN_CONFIG = [
     { boxjsKey: 'IQOO', qlEnvName: 'IQOO', remarks: 'IQOO从Boxjs同步' },
     { boxjsKey: 'YXYG', qlEnvName: 'DD_auth', remarks: 'YXYG从Boxjs同步' },
     { boxjsKey: 'JYXR', qlEnvName: 'wqwl_jyxe', remarks: '旧衣小二从Boxjs同步' },
-    { boxjsKey: 'QC', qlEnvName: 'NESTLE_TOKEN', remarks: '雀巢会员俱乐部从Boxjs同步' },
+    { boxjsKey: 'sf', qlEnvName: 'sfsyUrl', remarks: '顺丰速运从Boxjs同步' },
     { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛会员俱乐部从Boxjs同步' }
 ];
 
