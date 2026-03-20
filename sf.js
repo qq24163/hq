@@ -3,14 +3,15 @@
 hostname = mcs-mimp-web.sf-express.com
 
 [rewrite_local]
-# 顺丰Cookie捕获
-^https:\/\/mcs-mimp-web\.sf-express\.com\/mcs-mimp\/share\/weChat\/activityRedirect url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sf.js
+# 顺丰Cookie捕获（从请求头获取）
+^https:\/\/mcs-mimp-web\.sf-express\.com\/mcs-mimp\/commonPost\/~memberGoods~pointMallService~goodsList url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sf.js
 */
-// sf_cookie.js - 捕获顺丰响应头部Set-Cookie并管理多账号
+// sf_cookie.js - 从请求头中捕获顺丰Cookie并管理多账号
 (function() {
     'use strict';
     
-    const TARGET_URL = 'https://mcs-mimp-web.sf-express.com/mcs-mimp/share/weChat/activityRedirect';
+    const TARGET_URL = 'https://mcs-mimp-web.sf-express.com/mcs-mimp/commonPost/~memberGoods~pointMallService~goodsList';
+    const STORAGE_KEY = 'sf_cookies';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
@@ -19,60 +20,64 @@ hostname = mcs-mimp-web.sf-express.com
     }
     
     try {
-        // 获取响应头部
-        const headers = $response.headers;
+        // 获取请求头部的Cookie
+        const headers = $request.headers;
         if (!headers) {
-            console.log('[SF_COOKIE] 响应头部为空');
+            console.log('[SF_COOKIE] 请求头部为空');
             $done({});
             return;
         }
         
-        // 获取Set-Cookie头部（可能是字符串或数组）
-        let setCookies = headers['Set-Cookie'] || headers['set-cookie'];
-        if (!setCookies) {
-            console.log('[SF_COOKIE] 未找到Set-Cookie头部');
+        // 获取Cookie
+        let cookieStr = headers['Cookie'] || headers['cookie'];
+        if (!cookieStr) {
+            console.log('[SF_COOKIE] 未找到Cookie头部');
             $done({});
             return;
         }
         
-        // 确保setCookies是数组
-        if (!Array.isArray(setCookies)) {
-            setCookies = [setCookies];
-        }
-        
-        console.log(`[SF_COOKIE] 捕获到${setCookies.length}个Cookie`);
+        console.log(`[SF_COOKIE] 捕获到Cookie`);
         
         // 提取需要的cookie值
         let sessionId = '';
         let loginUserId = '';
         let loginMobile = '';
         
-        for (const cookie of setCookies) {
-            if (cookie.includes('sessionId=')) {
-                const match = cookie.match(/sessionId=([^;]+)/);
-                if (match) sessionId = match[1];
-            } else if (cookie.includes('_login_user_id_=')) {
-                const match = cookie.match(/_login_user_id_=([^;]+)/);
-                if (match) loginUserId = match[1];
-            } else if (cookie.includes('_login_mobile_=')) {
-                const match = cookie.match(/_login_mobile_=([^;]+)/);
-                if (match) loginMobile = match[1];
+        // 解析Cookie字符串
+        const cookiePairs = cookieStr.split(';').map(item => item.trim());
+        
+        for (const pair of cookiePairs) {
+            if (pair.startsWith('sessionId=')) {
+                sessionId = pair.substring('sessionId='.length);
+            } else if (pair.startsWith('_login_user_id_=')) {
+                loginUserId = pair.substring('_login_user_id_='.length);
+            } else if (pair.startsWith('_login_mobile_=')) {
+                loginMobile = pair.substring('_login_mobile_='.length);
+            }
+        }
+        
+        // 如果没有sessionId，尝试使用JSESSIONID
+        if (!sessionId) {
+            for (const pair of cookiePairs) {
+                if (pair.startsWith('JSESSIONID=')) {
+                    sessionId = pair.substring('JSESSIONID='.length);
+                    break;
+                }
             }
         }
         
         if (!sessionId || !loginUserId || !loginMobile) {
             console.log('[SF_COOKIE] 未找到完整的cookie信息');
-            console.log(`[SF_COOKIE] sessionId: ${sessionId}, loginUserId: ${loginUserId}, loginMobile: ${loginMobile}`);
             $done({});
             return;
         }
         
-        // 格式化为要求的格式
-        const cookieData = `sessionId=${sessionId};_login_mobile_=${loginMobile};_login_user_id_=${loginUserId}`;
-        console.log(`[SF_COOKIE] 格式化数据: ${cookieData}`);
+        // 格式化为指定格式
+        const newCookieData = `sessionId=${sessionId};_login_mobile_=${loginMobile};_login_user_id_=${loginUserId}`;
+        console.log(`[SF_COOKIE] 格式化数据: ${newCookieData}`);
         
         // 管理多账号
-        manageSfCookies(loginMobile, cookieData);
+        manageSfCookies(loginMobile, newCookieData);
         
     } catch (error) {
         console.log(`[SF_COOKIE] 错误: ${error}`);
@@ -81,7 +86,7 @@ hostname = mcs-mimp-web.sf-express.com
     $done({});
     
     function manageSfCookies(mobile, newCookieData) {
-        const STORAGE_KEY = 'sf';
+        // 获取已存储的cookies
         const storedCookies = $prefs.valueForKey(STORAGE_KEY) || '';
         let cookiesArray = storedCookies ? storedCookies.split('&').filter(c => c.trim() !== '') : [];
         
@@ -111,19 +116,14 @@ hostname = mcs-mimp-web.sf-express.com
         // 保存到BoxJS，用&分隔
         $prefs.setValueForKey(cookiesArray.join('&'), STORAGE_KEY);
         
-        // 发送精简通知
+        // 发送通知
         const title = existingIndex === -1 ? "✅ SF Cookie已添加" : "🔄 SF Cookie已更新";
         const subtitle = `手机号: ${mobile}`;
-        const message = `当前账号数: ${cookiesArray.length}`;
+        const message = `当前账号数: ${cookiesArray.length}\n格式: ${newCookieData}`;
         
         $notify(title, subtitle, message);
         
-        // 自动复制当前cookie数据
-        if (typeof $tool !== 'undefined' && $tool.copy) {
-            $tool.copy(newCookieData);
-            console.log('[SF_COOKIE] Cookie数据已复制到剪贴板');
-        }
-        
-        console.log(`[SF_COOKIE] 当前共 ${cookiesArray.length} 个账号`);
+        console.log(`[SF_COOKIE] 保存成功，当前共 ${cookiesArray.length} 个账号`);
+        console.log(`[SF_COOKIE] 存储格式: ${cookiesArray.join('&')}`);
     }
 })();
