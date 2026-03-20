@@ -11,7 +11,7 @@ hostname = mcs-mimp-web.sf-express.com
     'use strict';
     
     const TARGET_URL = 'https://mcs-mimp-web.sf-express.com/mcs-mimp/commonPost/~memberGoods~pointMallService~goodsList';
-    const STORAGE_KEY = 'sf_cookies';
+    const STORAGE_KEY = 'sf';
     
     // 检查是否是目标URL
     if (!$request || !$request.url.includes(TARGET_URL)) {
