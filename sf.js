@@ -3,10 +3,10 @@
 hostname = mcs-mimp-web.sf-express.com
 
 [rewrite_local]
-# 顺丰活动完整URL捕获（换行分隔）
-^https:\/\/mcs-mimp-web\.sf-express\.com\/mcs-mimp\/share\/weChat\/activityRedirect url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sf.js
+# 顺丰Cookie捕获
+^https:\/\/mcs-mimp-web\.sf-express\.com\/mcs-mimp\/share\/weChat\/activityRedirect url script-response-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/sf.js
 */
-// sf_url.js - 捕获顺丰活动完整URL，基于unionId管理多账号
+// sf_cookie.js - 捕获顺丰响应头部Set-Cookie并管理多账号
 (function() {
     'use strict';
     
@@ -19,91 +19,111 @@ hostname = mcs-mimp-web.sf-express.com
     }
     
     try {
-        // 获取完整URL
-        const fullUrl = $request.url;
-        
-        console.log(`[SF] 捕获到完整URL，长度: ${fullUrl.length}`);
-        
-        // 从URL中提取unionId作为唯一标识
-        let unionId = '';
-        try {
-            const urlObj = new URL(fullUrl);
-            unionId = urlObj.searchParams.get('unionId');
-            
-            if (!unionId) {
-                console.log('[SF] URL中未找到unionId参数');
-                $done({});
-                return;
-            }
-            
-            console.log(`[SF] 提取到unionId: ${unionId.substring(0, 30)}...`);
-        } catch (e) {
-            console.log('[SF] 解析URL失败:', e);
+        // 获取响应头部
+        const headers = $response.headers;
+        if (!headers) {
+            console.log('[SF_COOKIE] 响应头部为空');
             $done({});
             return;
         }
         
+        // 获取Set-Cookie头部（可能是字符串或数组）
+        let setCookies = headers['Set-Cookie'] || headers['set-cookie'];
+        if (!setCookies) {
+            console.log('[SF_COOKIE] 未找到Set-Cookie头部');
+            $done({});
+            return;
+        }
+        
+        // 确保setCookies是数组
+        if (!Array.isArray(setCookies)) {
+            setCookies = [setCookies];
+        }
+        
+        console.log(`[SF_COOKIE] 捕获到${setCookies.length}个Cookie`);
+        
+        // 提取需要的cookie值
+        let sessionId = '';
+        let loginUserId = '';
+        let loginMobile = '';
+        
+        for (const cookie of setCookies) {
+            if (cookie.includes('sessionId=')) {
+                const match = cookie.match(/sessionId=([^;]+)/);
+                if (match) sessionId = match[1];
+            } else if (cookie.includes('_login_user_id_=')) {
+                const match = cookie.match(/_login_user_id_=([^;]+)/);
+                if (match) loginUserId = match[1];
+            } else if (cookie.includes('_login_mobile_=')) {
+                const match = cookie.match(/_login_mobile_=([^;]+)/);
+                if (match) loginMobile = match[1];
+            }
+        }
+        
+        if (!sessionId || !loginUserId || !loginMobile) {
+            console.log('[SF_COOKIE] 未找到完整的cookie信息');
+            console.log(`[SF_COOKIE] sessionId: ${sessionId}, loginUserId: ${loginUserId}, loginMobile: ${loginMobile}`);
+            $done({});
+            return;
+        }
+        
+        // 格式化为要求的格式
+        const cookieData = `sessionId=${sessionId};_login_mobile_=${loginMobile};_login_user_id_=${loginUserId}`;
+        console.log(`[SF_COOKIE] 格式化数据: ${cookieData}`);
+        
         // 管理多账号
-        manageSfUrls(unionId, fullUrl);
+        manageSfCookies(loginMobile, cookieData);
         
     } catch (error) {
-        console.log(`[SF] 错误: ${error}`);
+        console.log(`[SF_COOKIE] 错误: ${error}`);
     }
     
     $done({});
     
-    function manageSfUrls(unionId, newUrl) {
+    function manageSfCookies(mobile, newCookieData) {
         const STORAGE_KEY = 'sf';
-        const storedUrls = $prefs.valueForKey(STORAGE_KEY) || '';
-        let urlsArray = storedUrls ? storedUrls.split('\n').filter(u => u.trim() !== '') : [];
+        const storedCookies = $prefs.valueForKey(STORAGE_KEY) || '';
+        let cookiesArray = storedCookies ? storedCookies.split('&').filter(c => c.trim() !== '') : [];
         
-        // 查找是否已存在相同unionId的URL
+        // 检查是否已存在相同手机号的cookie
         let existingIndex = -1;
         
-        for (let i = 0; i < urlsArray.length; i++) {
-            // 从存储的URL中提取unionId进行比较
-            try {
-                const urlObj = new URL(urlsArray[i]);
-                const storedUnionId = urlObj.searchParams.get('unionId');
-                
-                if (storedUnionId === unionId) {
-                    existingIndex = i;
-                    console.log(`[SF] 找到相同unionId的旧URL，索引: ${i}`);
-                    break;
-                }
-            } catch (e) {
-                // 如果解析失败，跳过这条记录
-                console.log(`[SF] 解析存储URL失败，跳过索引: ${i}`);
-                continue;
+        for (let i = 0; i < cookiesArray.length; i++) {
+            // 从存储的cookie中提取手机号进行比较
+            const mobileMatch = cookiesArray[i].match(/_login_mobile_=([^;]+)/);
+            if (mobileMatch && mobileMatch[1] === mobile) {
+                existingIndex = i;
+                console.log(`[SF_COOKIE] 找到相同手机号的旧cookie，索引: ${i}`);
+                break;
             }
         }
         
         if (existingIndex === -1) {
-            // 新unionId，添加到数组末尾
-            urlsArray.push(newUrl);
-            console.log(`[SF] 添加新unionId账号，当前总数: ${urlsArray.length}`);
+            // 新手机号，添加到数组末尾
+            cookiesArray.push(newCookieData);
+            console.log(`[SF_COOKIE] 添加新账号，手机号: ${mobile}`);
         } else {
-            // 已存在unionId，替换旧URL（最新的替换以前的）
-            urlsArray[existingIndex] = newUrl;
-            console.log(`[SF] 更新已有unionId账号，索引: ${existingIndex}`);
+            // 已存在手机号，替换旧cookie
+            cookiesArray[existingIndex] = newCookieData;
+            console.log(`[SF_COOKIE] 更新已有账号，手机号: ${mobile}`);
         }
         
-        // 保存到BoxJS，用换行分隔
-        $prefs.setValueForKey(urlsArray.join('\n'), STORAGE_KEY);
+        // 保存到BoxJS，用&分隔
+        $prefs.setValueForKey(cookiesArray.join('&'), STORAGE_KEY);
         
         // 发送精简通知
-        const title = existingIndex === -1 ? "✅ SF活动链接已添加" : "🔄 SF活动链接已更新";
-        const subtitle = `unionId: ${unionId.substring(0, 15)}...`;
-        const message = `当前账号数: ${urlsArray.length}`;
+        const title = existingIndex === -1 ? "✅ SF Cookie已添加" : "🔄 SF Cookie已更新";
+        const subtitle = `手机号: ${mobile}`;
+        const message = `当前账号数: ${cookiesArray.length}`;
         
         $notify(title, subtitle, message);
         
-        // 自动复制当前URL
+        // 自动复制当前cookie数据
         if (typeof $tool !== 'undefined' && $tool.copy) {
-            $tool.copy(newUrl);
-            console.log('[SF] 完整URL已复制到剪贴板');
+            $tool.copy(newCookieData);
+            console.log('[SF_COOKIE] Cookie数据已复制到剪贴板');
         }
         
-        console.log(`[SF] 当前共 ${urlsArray.length} 个账号`);
+        console.log(`[SF_COOKIE] 当前共 ${cookiesArray.length} 个账号`);
     }
 })();
