@@ -3,10 +3,10 @@
 hostname = jiuyixiaoer.fzjingzhou.com
 
 [rewrite_local]
-# 九一小二用户信息捕获 - 一个脚本搞定
+# 九一小二用户信息捕获
 ^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/jyxr.js
 */
-// jyxr.js - 捕获九一小二登录接口中的token（请求体）和mobile（响应体）
+// jyxr.js - 捕获九一小二登录接口中的请求token和响应mobile
 (function() {
     'use strict';
     
@@ -20,7 +20,7 @@ hostname = jiuyixiaoer.fzjingzhou.com
     }
     
     try {
-        // ========== 1. 从请求体中提取token ==========
+        // ========== 1. 从【请求表单】中提取 token ==========
         const requestBody = $request.body;
         if (!requestBody) {
             console.log('[JYXR] 请求体为空');
@@ -30,7 +30,7 @@ hostname = jiuyixiaoer.fzjingzhou.com
         
         console.log(`[JYXR] 请求体: ${requestBody}`);
         
-        // 解析请求体（表单格式）
+        // 解析请求体（表单格式：code=xxx&token=xxx&gdtVid=）
         let requestToken = '';
         const params = requestBody.split('&');
         for (const param of params) {
@@ -47,9 +47,9 @@ hostname = jiuyixiaoer.fzjingzhou.com
             return;
         }
         
-        console.log(`[JYXR] 从请求体提取到token: ${requestToken}`);
+        console.log(`[JYXR] ✓ 从【请求表单】提取到 token: ${requestToken}`);
         
-        // ========== 2. 从响应体中提取mobile ==========
+        // ========== 2. 从【响应体】中提取 mobile（personInfo.mobile） ==========
         const responseBody = $response.body;
         if (!responseBody) {
             console.log('[JYXR] 响应体为空');
@@ -76,25 +76,20 @@ hostname = jiuyixiaoer.fzjingzhou.com
             return;
         }
         
-        // 提取mobile - 根据实际响应结构获取
+        // 从 personInfo 中提取 mobile
         let mobile = '';
         
-        // 尝试多种路径获取mobile
+        // 根据你提供的响应结构，mobile 在 data.personInfo.mobile 中
         if (jsonData.data.personInfo && jsonData.data.personInfo.mobile) {
             mobile = jsonData.data.personInfo.mobile;
-        } else if (jsonData.data.mobile) {
-            mobile = jsonData.data.mobile;
-        } else if (jsonData.mobile) {
-            mobile = jsonData.mobile;
-        }
-        
-        if (!mobile) {
+            console.log(`[JYXR] ✓ 从【响应体 personInfo】提取到 mobile: ${mobile}`);
+        } else {
             console.log(`[JYXR] 未找到mobile，响应数据结构: ${JSON.stringify(jsonData.data).substring(0, 200)}`);
             $done({});
             return;
         }
         
-        console.log(`[JYXR] 捕获到数据 - token: ${requestToken}, 手机号: ${mobile}`);
+        console.log(`[JYXR] 完整数据 - 请求token: ${requestToken}, 手机号: ${mobile}`);
         
         // ========== 3. 格式化并保存 ==========
         const newData = `${requestToken}#${mobile}`;
