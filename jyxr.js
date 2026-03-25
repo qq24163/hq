@@ -3,8 +3,8 @@
 hostname = jiuyixiaoer.fzjingzhou.com
 
 [rewrite_local]
-# 九一小二用户信息捕获
-^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-request-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/jyxr.js
+# 九一小二用户信息捕获 - 一个脚本搞定
+^https:\/\/jiuyixiaoer\.fzjingzhou\.com\/api\/login\/getWxMiniProgramSessionKey url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/jyxr.js
 */
 // jyxr.js - 捕获九一小二登录接口中的token（请求体）和mobile（响应体）
 (function() {
@@ -20,7 +20,7 @@ hostname = jiuyixiaoer.fzjingzhou.com
     }
     
     try {
-        // 从请求体中提取token
+        // ========== 1. 从请求体中提取token ==========
         const requestBody = $request.body;
         if (!requestBody) {
             console.log('[JYXR] 请求体为空');
@@ -49,13 +49,15 @@ hostname = jiuyixiaoer.fzjingzhou.com
         
         console.log(`[JYXR] 从请求体提取到token: ${requestToken}`);
         
-        // 获取响应体
+        // ========== 2. 从响应体中提取mobile ==========
         const responseBody = $response.body;
         if (!responseBody) {
             console.log('[JYXR] 响应体为空');
             $done({});
             return;
         }
+        
+        console.log(`[JYXR] 响应体: ${responseBody.substring(0, 200)}`);
         
         // 解析JSON
         let jsonData;
@@ -74,7 +76,7 @@ hostname = jiuyixiaoer.fzjingzhou.com
             return;
         }
         
-        // 提取mobile - 根据实际响应结构，mobile在data.personInfo.mobile中
+        // 提取mobile - 根据实际响应结构获取
         let mobile = '';
         
         // 尝试多种路径获取mobile
@@ -92,9 +94,9 @@ hostname = jiuyixiaoer.fzjingzhou.com
             return;
         }
         
-        console.log(`[JYXR] 捕获到数据 - 请求token: ${requestToken}, 手机号: ${mobile}`);
+        console.log(`[JYXR] 捕获到数据 - token: ${requestToken}, 手机号: ${mobile}`);
         
-        // 格式化数据：请求token#mobile
+        // ========== 3. 格式化并保存 ==========
         const newData = `${requestToken}#${mobile}`;
         
         // 管理多账号
@@ -151,7 +153,6 @@ hostname = jiuyixiaoer.fzjingzhou.com
                     "账号已存在", 
                     `手机号: ${mobile}\n当前账号数: ${dataArray.length}`
                 );
-                $done({});
                 return;
             }
         }
