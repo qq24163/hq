@@ -68,16 +68,26 @@ hostname = jiuyixiaoer.fzjingzhou.com
         }
         
         // 检查响应是否成功
-        if (jsonData.code !== 1000 || !jsonData.data || !jsonData.data.personInfo) {
+        if (jsonData.code !== 1000 || !jsonData.data) {
             console.log(`[JYXR] 响应失败或数据为空: code=${jsonData.code}`);
             $done({});
             return;
         }
         
-        // 提取mobile
-        const mobile = jsonData.data.personInfo.mobile;
+        // 提取mobile - 根据实际响应结构，mobile在data.personInfo.mobile中
+        let mobile = '';
+        
+        // 尝试多种路径获取mobile
+        if (jsonData.data.personInfo && jsonData.data.personInfo.mobile) {
+            mobile = jsonData.data.personInfo.mobile;
+        } else if (jsonData.data.mobile) {
+            mobile = jsonData.data.mobile;
+        } else if (jsonData.mobile) {
+            mobile = jsonData.mobile;
+        }
+        
         if (!mobile) {
-            console.log(`[JYXR] 未找到mobile`);
+            console.log(`[JYXR] 未找到mobile，响应数据结构: ${JSON.stringify(jsonData.data).substring(0, 200)}`);
             $done({});
             return;
         }
@@ -106,12 +116,15 @@ hostname = jiuyixiaoer.fzjingzhou.com
         let oldToken = '';
         
         for (let i = 0; i < dataArray.length; i++) {
-            const storedMobile = dataArray[i].split('#')[1];
-            if (storedMobile === mobile) {
-                existingIndex = i;
-                oldToken = dataArray[i].split('#')[0];
-                console.log(`[JYXR] 找到相同手机号的旧数据，索引: ${i}, 旧token: ${oldToken}`);
-                break;
+            const parts = dataArray[i].split('#');
+            if (parts.length >= 2) {
+                const storedMobile = parts[1];
+                if (storedMobile === mobile) {
+                    existingIndex = i;
+                    oldToken = parts[0];
+                    console.log(`[JYXR] 找到相同手机号的旧数据，索引: ${i}, 旧token: ${oldToken}`);
+                    break;
+                }
             }
         }
         
