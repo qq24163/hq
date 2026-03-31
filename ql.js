@@ -14,7 +14,7 @@ const TOKEN_CONFIG = [
     { boxjsKey: 'aliyunWeb_data', qlEnvName: 'aliyunWeb_data', remarks: '阿里云数据从Boxjs同步' },
     { boxjsKey: 'damember', qlEnvName: 'DaChao', remarks: '大潮从Boxjs同步' },
     { boxjsKey: 'IQOO', qlEnvName: 'IQOO', remarks: 'IQOO从Boxjs同步' },
-    { boxjsKey: 'YXYG', qlEnvName: 'DD_auth', remarks: 'YXYG从Boxjs同步' },
+    { boxjsKey: 'YINYU', qlEnvName: 'wqwl_new_yinyu', remarks: '新银鱼通用从Boxjs同步' },
     { boxjsKey: 'jyxr', qlEnvName: 'wqwl_jyxe', remarks: '旧衣小二从Boxjs同步' },
     { boxjsKey: 'sf', qlEnvName: 'sfsyUrl', remarks: '顺丰速运从Boxjs同步' },
     { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛会员俱乐部从Boxjs同步' }
