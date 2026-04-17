@@ -7,7 +7,7 @@ hostname = dt.yuanhukj.com
 ^https:\/\/dt\.yuanhukj\.com\/api\/mobile\/account\/user\/overview_my\?.* url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/lzy.js
 */
 // lzy.js - 捕获林泽园请求头中的Authorization、app-sign和响应体中的user_id
-// 修复：正确识别相同user_id并更新
+// 修复：正确识别相同user_id并更新1
 (function() {
     'use strict';
     
