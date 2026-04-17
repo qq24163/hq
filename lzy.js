@@ -20,7 +20,7 @@ hostname = dt.yuanhukj.com
     }
     
     try {
-        // 1. 从请求头中获取Authorization
+        // 1. 从请求头中获取Authorization和app-sign
         const headers = $request.headers;
         if (!headers) {
             console.log('[LZY] 请求头部为空');
@@ -46,16 +46,17 @@ hostname = dt.yuanhukj.com
             console.log(`[LZY] Authorization (无Bearer): ${cleanAuth.substring(0, 30)}...`);
         }
         
-        // 2. 获取app-sign（注意大小写）
-        let appSign = headers['app-sign'] || headers['App-Sign'] || headers['app_sign'] || headers['appsign'];
+        // 获取app-sign（注意大小写）
+        let appSign = headers['app-sign'] || headers['App-Sign'] || headers['app_sign'] || headers['App_Sign'];
         if (!appSign) {
             console.log('[LZY] 未找到app-sign头部');
-            // 继续执行，但记录日志
+            // 注意：这里不退出，继续执行，但会记录日志
+            appSign = '';
         } else {
             console.log(`[LZY] 捕获到app-sign: ${appSign.substring(0, 30)}...`);
         }
         
-        // 3. 从响应体中获取data
+        // 2. 从响应体中获取data
         const responseBody = $response.body;
         if (!responseBody) {
             console.log('[LZY] 响应体为空');
@@ -77,13 +78,14 @@ hostname = dt.yuanhukj.com
         const data = jsonData.data;
         if (data === undefined || data === null) {
             console.log(`[LZY] data字段为空: ${data}`);
-            $done({});
-            return;
+            // 继续执行，允许保存空data
         }
         
         // 将data转换为字符串（如果是对象则JSON序列化）
         let dataStr = '';
-        if (typeof data === 'object') {
+        if (data === null) {
+            dataStr = 'null';
+        } else if (typeof data === 'object') {
             dataStr = JSON.stringify(data);
         } else {
             dataStr = String(data);
@@ -91,23 +93,16 @@ hostname = dt.yuanhukj.com
         
         console.log(`[LZY] 捕获到data: ${dataStr.substring(0, 50)}...`);
         
-        // 检查响应是否成功（可选）
+        // 检查响应是否成功（可选：根据实际需求判断）
         if (jsonData.code !== 0) {
             console.log(`[LZY] 响应状态码: ${jsonData.code}, msg: ${jsonData.msg}`);
         }
         
-        // 格式化数据：data#app-sign#Authorization
-        let newData = '';
-        if (appSign) {
-            newData = `${dataStr}#${appSign}#${cleanAuth}`;
-        } else {
-            // 如果没有app-sign，用空字符串代替
-            newData = `${dataStr}##${cleanAuth}`;
-            console.log(`[LZY] app-sign为空，使用空字符串`);
-        }
+        // 格式化数据：data#Authorization#app-sign
+        const newData = `${dataStr}#${cleanAuth}#${appSign}`;
         
         // 管理多账号
-        manageLzyData(dataStr, appSign || '', cleanAuth, newData);
+        manageLzyData(dataStr, cleanAuth, appSign, newData);
         
     } catch (error) {
         console.log(`[LZY] 错误: ${error}`);
@@ -115,7 +110,7 @@ hostname = dt.yuanhukj.com
     
     $done({});
     
-    function manageLzyData(data, appSign, auth, newData) {
+    function manageLzyData(data, auth, appSign, newData) {
         // 获取已存储的数据
         const storedData = $prefs.valueForKey(STORAGE_KEY) || '';
         let dataArray = storedData ? storedData.split('\n').filter(item => item.trim() !== '') : [];
@@ -127,12 +122,12 @@ hostname = dt.yuanhukj.com
         
         for (let i = 0; i < dataArray.length; i++) {
             const parts = dataArray[i].split('#');
-            if (parts.length >= 3) {
-                const storedAuth = parts[2];
+            if (parts.length >= 2) {
+                const storedAuth = parts[1];
                 if (storedAuth === auth) {
                     existingIndex = i;
                     oldData = parts[0];
-                    oldAppSign = parts[1];
+                    oldAppSign = parts.length >= 3 ? parts[2] : '';
                     console.log(`[LZY] 找到相同Authorization的旧数据，索引: ${i}`);
                     break;
                 }
@@ -147,14 +142,17 @@ hostname = dt.yuanhukj.com
             action = '添加';
             console.log(`[LZY] 添加新账号，Authorization: ${auth.substring(0, 30)}...`);
         } else {
-            // 已存在Authorization，检查data或app-sign是否变化
+            // 已存在Authorization，检查data或app-sign是否有变化
             if (oldData !== data || oldAppSign !== appSign) {
                 // 有变化，更新
                 dataArray[existingIndex] = newData;
                 action = '更新';
-                console.log(`[LZY] 更新已有账号，旧data: ${oldData.substring(0, 30)}..., 新data: ${data.substring(0, 30)}...`);
+                console.log(`[LZY] 更新已有账号的数据`);
+                if (oldData !== data) {
+                    console.log(`[LZY]   data变化: ${oldData.substring(0, 30)}... -> ${data.substring(0, 30)}...`);
+                }
                 if (oldAppSign !== appSign) {
-                    console.log(`[LZY] app-sign已更新: ${oldAppSign} -> ${appSign}`);
+                    console.log(`[LZY]   app-sign变化: ${oldAppSign.substring(0, 30)}... -> ${appSign.substring(0, 30)}...`);
                 }
             } else {
                 // 都没变化，跳过
@@ -194,10 +192,10 @@ hostname = dt.yuanhukj.com
         }
         
         console.log(`[LZY] 保存成功，当前共 ${dataArray.length} 个账号`);
-        console.log(`[LZY] 存储格式（换行分隔，格式: data#app-sign#Authorization）:`);
+        console.log(`[LZY] 存储格式（换行分隔，格式: data#Authorization#app-sign）:`);
         dataArray.forEach((item, index) => {
             const parts = item.split('#');
-            console.log(`  ${index + 1}. data: ${parts[0].substring(0, 30)}..., app-sign: ${parts[1].substring(0, 20)}..., Authorization: ${parts[2].substring(0, 30)}...`);
+            console.log(`  ${index + 1}. data: ${parts[0]?.substring(0, 30)}..., Authorization: ${parts[1]?.substring(0, 30)}..., app-sign: ${parts[2]?.substring(0, 30)}...`);
         });
     }
 })();
