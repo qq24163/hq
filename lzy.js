@@ -7,6 +7,7 @@ hostname = dt.yuanhukj.com
 ^https:\/\/dt\.yuanhukj\.com\/api\/mobile\/account\/user\/overview_my\?.* url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/lzy.js
 */
 // lzy.js - 捕获林泽园请求头中的Authorization、app-sign和响应体中的user_id
+// 支持根据user_id自动更新Authorization和app-sign
 (function() {
     'use strict';
     
@@ -39,11 +40,10 @@ hostname = dt.yuanhukj.com
         // 去掉Bearer前缀（如果存在）
         let cleanAuth = authorization;
         if (authorization.startsWith('Bearer ') || authorization.startsWith('bearer ')) {
-            cleanAuth = authorization.substring(7); // 去掉"Bearer "（7个字符）
-            console.log(`[LZY] 原始Authorization: ${authorization.substring(0, 30)}...`);
+            cleanAuth = authorization.substring(7);
             console.log(`[LZY] 去掉Bearer后: ${cleanAuth.substring(0, 30)}...`);
         } else {
-            console.log(`[LZY] Authorization (无Bearer): ${cleanAuth.substring(0, 30)}...`);
+            console.log(`[LZY] Authorization: ${cleanAuth.substring(0, 30)}...`);
         }
         
         // 获取app-sign（注意大小写）
@@ -52,7 +52,7 @@ hostname = dt.yuanhukj.com
             console.log('[LZY] 未找到app-sign头部');
             appSign = '';
         } else {
-            console.log(`[LZY] 捕获到app-sign: ${appSign.substring(0, 30)}...`);
+            console.log(`[LZY] app-sign: ${appSign.substring(0, 30)}...`);
         }
         
         // 2. 从响应体中获取data.user_id
@@ -87,7 +87,7 @@ hostname = dt.yuanhukj.com
         // 提取data.user_id
         const userId = jsonData.data?.user_id;
         if (!userId) {
-            console.log(`[LZY] 未找到user_id字段，data内容: ${JSON.stringify(jsonData.data)}`);
+            console.log(`[LZY] 未找到user_id字段`);
             $done({});
             return;
         }
@@ -97,7 +97,7 @@ hostname = dt.yuanhukj.com
         // 格式化数据：user_id#Authorization#app-sign
         const newData = `${userId}#${cleanAuth}#${appSign}`;
         
-        // 管理多账号
+        // 管理多账号（支持根据user_id自动更新）
         manageLzyData(userId, cleanAuth, appSign, newData);
         
     } catch (error) {
@@ -124,7 +124,7 @@ hostname = dt.yuanhukj.com
                     existingIndex = i;
                     oldAuth = parts.length >= 2 ? parts[1] : '';
                     oldAppSign = parts.length >= 3 ? parts[2] : '';
-                    console.log(`[LZY] 找到相同user_id的旧数据，索引: ${i}, user_id: ${userId}`);
+                    console.log(`[LZY] 找到相同user_id，索引: ${i}`);
                     break;
                 }
             }
@@ -138,29 +138,15 @@ hostname = dt.yuanhukj.com
             action = '添加';
             console.log(`[LZY] 添加新账号，user_id: ${userId}`);
         } else {
-            // 已存在user_id，检查Authorization或app-sign是否有变化
-            if (oldAuth !== auth || oldAppSign !== appSign) {
-                // 有变化，更新
-                dataArray[existingIndex] = newData;
-                action = '更新';
-                console.log(`[LZY] 更新已有账号的数据，user_id: ${userId}`);
-                if (oldAuth !== auth) {
-                    console.log(`[LZY]   Authorization变化`);
-                }
-                if (oldAppSign !== appSign) {
-                    console.log(`[LZY]   app-sign变化`);
-                }
-            } else {
-                // 都没变化，跳过
-                action = '跳过';
-                console.log(`[LZY] 账号已存在且数据未变化，跳过保存`);
-                $notify(
-                    "ℹ️ 林泽园账号", 
-                    "账号已存在", 
-                    `user_id: ${userId}\n当前账号数: ${dataArray.length}`
-                );
-                $done({});
-                return;
+            // 已存在user_id，更新数据
+            dataArray[existingIndex] = newData;
+            action = '更新';
+            console.log(`[LZY] 更新已有账号，user_id: ${userId}`);
+            if (oldAuth !== auth) {
+                console.log(`[LZY]   Authorization已更新`);
+            }
+            if (oldAppSign !== appSign) {
+                console.log(`[LZY]   app-sign已更新`);
             }
         }
         
@@ -168,16 +154,9 @@ hostname = dt.yuanhukj.com
         $prefs.setValueForKey(dataArray.join('\n'), STORAGE_KEY);
         
         // 发送通知
-        let title = '';
-        let subtitle = `user_id: ${userId}`;
-        let message = `Authorization: ${auth.substring(0, 15)}...\napp-sign: ${appSign.substring(0, 15)}...\n当前账号数: ${dataArray.length}`;
-        
-        if (action === '添加') {
-            title = "✅ 林泽园账号已添加";
-        } else if (action === '更新') {
-            title = "🔄 林泽园数据已更新";
-            message = `user_id: ${userId}\nAuthorization已更新\n当前账号数: ${dataArray.length}`;
-        }
+        const title = action === '添加' ? "✅ 林泽园账号已添加" : "🔄 林泽园数据已更新";
+        const subtitle = `user_id: ${userId}`;
+        const message = `当前账号数: ${dataArray.length}`;
         
         $notify(title, subtitle, message);
         
@@ -188,10 +167,10 @@ hostname = dt.yuanhukj.com
         }
         
         console.log(`[LZY] 保存成功，当前共 ${dataArray.length} 个账号`);
-        console.log(`[LZY] 存储格式（换行分隔，格式: user_id#Authorization#app-sign）:`);
+        console.log(`[LZY] 存储格式: user_id#Authorization#app-sign`);
         dataArray.forEach((item, index) => {
             const parts = item.split('#');
-            console.log(`  ${index + 1}. user_id: ${parts[0]}, Authorization: ${parts[1]?.substring(0, 30)}..., app-sign: ${parts[2]?.substring(0, 30)}...`);
+            console.log(`  ${index + 1}. user_id: ${parts[0]}`);
         });
     }
 })();
