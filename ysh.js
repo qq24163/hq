@@ -23,8 +23,6 @@ const baseBody = {
 };
 
 const OCR_SERVER = "http://121.40.216.18:7777";
-
-// BoxJs 配置 Key
 const boxKey = "yshqy";
 
 function getBoxConfig() {
@@ -35,6 +33,7 @@ function getBoxConfig() {
         try {
           resolve(JSON.parse(config));
         } catch(e) {
+          console.log("BoxJs 解析失败，使用默认配置");
           resolve({});
         }
       } else {
@@ -82,7 +81,6 @@ function claimGoods(goodid) {
   });
 }
 
-// 获取验证码图片
 function getCaptchaImage(exchangeCode) {
   return $task.fetch({
     url: `${getCodeUrl}?exchangecodeCode=${exchangeCode}`,
@@ -98,9 +96,8 @@ function getCaptchaImage(exchangeCode) {
   });
 }
 
-// OCR 识别验证码
+// OCR 识别 - 修复版，处理非 JSON 响应
 function recognizeCaptcha(base64Image) {
-  // 去掉 base64 头部的 "data:image/jpeg;base64,"
   let pureBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
   
   return $task.fetch({
@@ -111,24 +108,37 @@ function recognizeCaptcha(base64Image) {
     },
     body: JSON.stringify({
       "image": pureBase64,
-      "type": "number"  // 根据您的OCR服务器接口调整
+      "type": "number"
     })
   }).then(response => {
-    let data = JSON.parse(response.body);
-    // 根据您的OCR服务器返回格式调整
-    let captcha = data.result || data.code || data.text;
-    if (captcha && captcha.length > 0) {
-      // 验证码通常是4位数字或字母
-      captcha = captcha.replace(/[^0-9a-zA-Z]/g, "").substring(0, 4);
+    let body = response.body;
+    console.log("OCR 原始响应:", body.substring(0, 200));
+    
+    let captcha = "";
+    
+    // 尝试多种解析方式
+    try {
+      // 尝试 JSON 解析
+      let jsonData = JSON.parse(body);
+      captcha = jsonData.result || jsonData.code || jsonData.text || jsonData.data || "";
+    } catch(e) {
+      // 如果不是 JSON，尝试直接提取纯文本（去除空格和特殊字符）
+      console.log("非 JSON 响应，尝试直接提取文本");
+      captcha = body.replace(/[^0-9a-zA-Z]/g, "");
+    }
+    
+    // 验证码通常是4位
+    if (captcha && captcha.length >= 4) {
+      captcha = captcha.substring(0, 4);
       console.log(`识别验证码: ${captcha}`);
       return captcha;
     } else {
-      throw new Error("OCR识别失败");
+      console.log(`识别结果无效: ${captcha}`);
+      throw new Error("OCR识别失败，请检查 OCR 服务器");
     }
   });
 }
 
-// 兑换接口
 function exchangeGoods(exchangeCode, picCode, type = 4) {
   let body = {
     "exchangeCode": exchangeCode,
@@ -155,30 +165,25 @@ function exchangeGoods(exchangeCode, picCode, type = 4) {
 // 主流程
 async function main() {
   try {
-    // 读取配置
     let boxConfig = await getBoxConfig();
-    let targetGoodName = boxConfig.targetGood || "爱奇艺黄金会员月卡";
+    let targetGoodName = boxConfig.targetGood || "QQ音乐绿钻豪华版会员月卡";
     
     console.log(`目标权益: ${targetGoodName}`);
     
-    // 获取可领取权益
     let { availableGoods, tips } = await getGoodsList();
     let tipMsg = (tips && tips[0]) ? tips[0] : "";
     
     if (availableGoods.length === 0) {
       $notify("联通权益领取", "", `📌 暂无可领取权益\n${tipMsg}`);
-      console.log("暂无可领取权益");
       return;
     }
     
-    // 查找目标权益
     let targetGood = availableGoods.find(item => item.goodname === targetGoodName);
     
     if (!targetGood) {
       let availableNames = availableGoods.map(g => g.goodname).join("\n");
       $notify("联通权益领取", "未找到指定权益", 
         `未找到: ${targetGoodName}\n\n可领取:\n${availableNames}`);
-      console.log(`未找到权益: ${targetGoodName}`);
       return;
     }
     
@@ -186,46 +191,43 @@ async function main() {
     
     console.log(`准备领取: ${targetGood.goodname} (${priceYuan}元)`);
     
-    // 步骤1：领取获取 orderId (即 exchangeCode)
+    // 领取
     let exchangeCode = await claimGoods(targetGood.goodid);
     console.log(`领取成功，兑换码: ${exchangeCode}`);
     
-    // 步骤2：获取验证码图片
+    // 获取验证码
     console.log("正在获取验证码...");
     let captchaBase64 = await getCaptchaImage(exchangeCode);
     
-    // 步骤3：OCR识别验证码
+    // OCR 识别
     console.log("正在识别验证码...");
     let picCode = await recognizeCaptcha(captchaBase64);
-    console.log(`验证码识别结果: ${picCode}`);
     
-    // 步骤4：兑换
+    // 兑换
     console.log("正在兑换...");
     let exchangeResult = await exchangeGoods(exchangeCode, picCode);
     
-    // 成功通知
     let message = `✅ 兑换成功！\n\n`;
     message += `🎁 ${targetGood.goodname}\n`;
     message += `💰 价格: ${priceYuan}元\n`;
-    if (exchangeResult.url) {
-      message += `🔗 兑换链接已生成\n`;
-    }
-    if (exchangeResult.token) {
-      message += `🎫 Token 已获取\n`;
-    }
     message += `🆔 订单号: ${exchangeCode}\n`;
-    if (tipMsg) {
-      message += `\n📌 ${tipMsg}`;
-    }
     
     $notify("联通权益领取", "兑换成功", message);
     console.log(`兑换成功:`, exchangeResult);
     
+    // 成功完成后退出脚本
+    $done();
+    
   } catch (error) {
     console.log(`执行失败: ${error.message}`);
     $notify("联通权益领取", "执行失败", error.message);
+    $done();
   }
 }
 
-// 延迟执行
-setTimeout(main, 1000);
+// 运行并确保脚本会退出
+main().catch(e => {
+  console.log(`未捕获的错误: ${e.message}`);
+  $notify("联通权益领取", "脚本错误", e.message);
+  $done();
+});
