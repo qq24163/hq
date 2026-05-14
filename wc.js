@@ -53,50 +53,44 @@ hostname = vapp.taizhou.com.cn
             return;
         }
         
-        console.log(`[WangChao] 原始响应体: ${responseBody}`);
+        console.log(`[WangChao] 原始响应体长度: ${responseBody.length}`);
         
         let jsonData;
         try {
             jsonData = JSON.parse(responseBody);
-            console.log(`[WangChao] 解析成功，完整JSON: ${JSON.stringify(jsonData)}`);
+            console.log(`[WangChao] JSON解析成功`);
         } catch (e) {
             console.log(`[WangChao] JSON解析失败: ${e}`);
             $done({});
             return;
         }
         
-        // ========== 3. 提取手机号（尝试多种路径）==========
+        // ========== 3. 提取手机号（修复路径：data.rst.mobile）==========
         let mobile = '';
         
-        // 路径1: data.mobile
-        if (jsonData.data && jsonData.data.mobile) {
+        // 路径1: data.rst.mobile（根据实际响应结构）
+        if (jsonData.data && jsonData.data.rst && jsonData.data.rst.mobile) {
+            mobile = jsonData.data.rst.mobile;
+            console.log(`[WangChao] 从 data.rst.mobile 提取: ${mobile}`);
+        }
+        // 路径2: data.mobile
+        else if (jsonData.data && jsonData.data.mobile) {
             mobile = jsonData.data.mobile;
             console.log(`[WangChao] 从 data.mobile 提取: ${mobile}`);
         }
-        // 路径2: data.account.mobile
+        // 路径3: data.account.mobile
         else if (jsonData.data && jsonData.data.account && jsonData.data.account.mobile) {
             mobile = jsonData.data.account.mobile;
             console.log(`[WangChao] 从 data.account.mobile 提取: ${mobile}`);
         }
-        // 路径3: mobile
+        // 路径4: mobile
         else if (jsonData.mobile) {
             mobile = jsonData.mobile;
             console.log(`[WangChao] 从 mobile 提取: ${mobile}`);
         }
-        // 路径4: 遍历data对象查找mobile字段
-        else if (jsonData.data) {
-            for (let key in jsonData.data) {
-                if (key.toLowerCase().includes('mobile')) {
-                    mobile = jsonData.data[key];
-                    console.log(`[WangChao] 从 data.${key} 提取: ${mobile}`);
-                    break;
-                }
-            }
-        }
         
         if (!mobile) {
             console.log(`[WangChao] ❌ 未找到手机号，跳过更新`);
-            console.log(`[WangChao] 响应结构: ${JSON.stringify(jsonData)}`);
             $done({});
             return;
         }
@@ -111,7 +105,7 @@ hostname = vapp.taizhou.com.cn
             return;
         }
         
-        console.log(`[WangChao] 存储数据: ${storedData}`);
+        console.log(`[WangChao] 存储数据预览: ${storedData.substring(0, 100)}...`);
         
         let dataArray = storedData.split('\n').filter(item => item.trim() !== '');
         let existingIndex = -1;
@@ -123,7 +117,6 @@ hostname = vapp.taizhou.com.cn
             const parts = dataArray[i].split('&');
             if (parts.length >= 1) {
                 const storedMobile = parts[0];
-                console.log(`[WangChao] 比较: 存储的="${storedMobile}" vs 新的="${mobile}"`);
                 if (storedMobile === mobile) {
                     existingIndex = i;
                     oldPassword = parts[1] || '';
@@ -146,8 +139,8 @@ hostname = vapp.taizhou.com.cn
         // 格式：手机号&密码&User-Agent&X-SESSION-ID&X-REQUEST-ID&X-TIMESTAMP&X-SIGNATURE&X-TENANT-ID
         const newData = `${mobile}&${oldPassword}&${userAgent}&${xSessionId}&${xRequestId}&${xTimestamp}&${xSignature}&${xTenantId}`;
         
-        console.log(`[WangChao] 旧数据: ${oldData}`);
-        console.log(`[WangChao] 新数据: ${newData}`);
+        console.log(`[WangChao] 旧数据: ${oldData.substring(0, 80)}...`);
+        console.log(`[WangChao] 新数据: ${newData.substring(0, 80)}...`);
         
         dataArray[existingIndex] = newData;
         
