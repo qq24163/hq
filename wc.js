@@ -40,6 +40,10 @@ hostname = vapp.taizhou.com.cn
         
         console.log(`[WangChao] User-Agent: ${userAgent.substring(0, 50)}...`);
         console.log(`[WangChao] X-SESSION-ID: ${xSessionId.substring(0, 30)}...`);
+        console.log(`[WangChao] X-REQUEST-ID: ${xRequestId}`);
+        console.log(`[WangChao] X-TIMESTAMP: ${xTimestamp}`);
+        console.log(`[WangChao] X-SIGNATURE: ${xSignature.substring(0, 30)}...`);
+        console.log(`[WangChao] X-TENANT-ID: ${xTenantId}`);
         
         // ========== 2. 获取响应体中的手机号 ==========
         const responseBody = $response.body;
@@ -49,30 +53,57 @@ hostname = vapp.taizhou.com.cn
             return;
         }
         
+        console.log(`[WangChao] 原始响应体: ${responseBody}`);
+        
         let jsonData;
         try {
             jsonData = JSON.parse(responseBody);
+            console.log(`[WangChao] 解析成功，完整JSON: ${JSON.stringify(jsonData)}`);
         } catch (e) {
             console.log(`[WangChao] JSON解析失败: ${e}`);
             $done({});
             return;
         }
         
-        // 提取手机号
+        // ========== 3. 提取手机号（尝试多种路径）==========
         let mobile = '';
+        
+        // 路径1: data.mobile
         if (jsonData.data && jsonData.data.mobile) {
             mobile = jsonData.data.mobile;
+            console.log(`[WangChao] 从 data.mobile 提取: ${mobile}`);
+        }
+        // 路径2: data.account.mobile
+        else if (jsonData.data && jsonData.data.account && jsonData.data.account.mobile) {
+            mobile = jsonData.data.account.mobile;
+            console.log(`[WangChao] 从 data.account.mobile 提取: ${mobile}`);
+        }
+        // 路径3: mobile
+        else if (jsonData.mobile) {
+            mobile = jsonData.mobile;
+            console.log(`[WangChao] 从 mobile 提取: ${mobile}`);
+        }
+        // 路径4: 遍历data对象查找mobile字段
+        else if (jsonData.data) {
+            for (let key in jsonData.data) {
+                if (key.toLowerCase().includes('mobile')) {
+                    mobile = jsonData.data[key];
+                    console.log(`[WangChao] 从 data.${key} 提取: ${mobile}`);
+                    break;
+                }
+            }
         }
         
         if (!mobile) {
-            console.log(`[WangChao] 未找到手机号，跳过更新`);
+            console.log(`[WangChao] ❌ 未找到手机号，跳过更新`);
+            console.log(`[WangChao] 响应结构: ${JSON.stringify(jsonData)}`);
             $done({});
             return;
         }
         
         console.log(`[WangChao] ✅ 捕获到手机号: ${mobile}`);
         
-        // ========== 3. 获取存储的数据 ==========
+        // ========== 4. 获取存储的数据 ==========
         let storedData = $prefs.valueForKey(STORAGE_KEY) || '';
         if (!storedData) {
             console.log(`[WangChao] BoxJS中无数据，跳过更新`);
@@ -80,18 +111,26 @@ hostname = vapp.taizhou.com.cn
             return;
         }
         
+        console.log(`[WangChao] 存储数据: ${storedData}`);
+        
         let dataArray = storedData.split('\n').filter(item => item.trim() !== '');
         let existingIndex = -1;
         let oldPassword = '';
+        let oldData = '';
         
         // 查找是否存在该手机号
         for (let i = 0; i < dataArray.length; i++) {
             const parts = dataArray[i].split('&');
-            if (parts.length >= 1 && parts[0] === mobile) {
-                existingIndex = i;
-                oldPassword = parts[1] || '';
-                console.log(`[WangChao] 找到已存在账号，手机号: ${mobile}`);
-                break;
+            if (parts.length >= 1) {
+                const storedMobile = parts[0];
+                console.log(`[WangChao] 比较: 存储的="${storedMobile}" vs 新的="${mobile}"`);
+                if (storedMobile === mobile) {
+                    existingIndex = i;
+                    oldPassword = parts[1] || '';
+                    oldData = dataArray[i];
+                    console.log(`[WangChao] ✅ 找到已存在账号，索引: ${i}`);
+                    break;
+                }
             }
         }
         
@@ -103,8 +142,13 @@ hostname = vapp.taizhou.com.cn
             return;
         }
         
-        // ========== 4. 更新数据（保留密码）==========
+        // ========== 5. 更新数据（保留密码）==========
+        // 格式：手机号&密码&User-Agent&X-SESSION-ID&X-REQUEST-ID&X-TIMESTAMP&X-SIGNATURE&X-TENANT-ID
         const newData = `${mobile}&${oldPassword}&${userAgent}&${xSessionId}&${xRequestId}&${xTimestamp}&${xSignature}&${xTenantId}`;
+        
+        console.log(`[WangChao] 旧数据: ${oldData}`);
+        console.log(`[WangChao] 新数据: ${newData}`);
+        
         dataArray[existingIndex] = newData;
         
         // 保存到BoxJS
@@ -115,9 +159,15 @@ hostname = vapp.taizhou.com.cn
         // 自动复制到剪贴板
         if (typeof $tool !== 'undefined' && $tool.copy) {
             $tool.copy(newData);
+            console.log('[WangChao] 数据已复制到剪贴板');
         }
         
-        console.log(`[WangChao] 更新成功，手机号: ${mobile}`);
+        console.log(`[WangChao] 更新成功！`);
+        console.log(`[WangChao] ========== 当前所有账号 ==========`);
+        dataArray.forEach((item, index) => {
+            const parts = item.split('&');
+            console.log(`  ${index + 1}. 手机号: ${parts[0]}, 密码: ${parts[1] ? '有' : '无'}`);
+        });
         
     } catch (error) {
         console.log(`[WangChao] 错误: ${error}`);
