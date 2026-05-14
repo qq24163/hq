@@ -5,113 +5,116 @@ hostname = vapp.taizhou.com.cn
 [rewrite_local]
 ^https:\/\/vapp\.taizhou\.com\.cn\/api\/user_mumber\/account_detail\?osTypeCode=2 url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/wc.js
 */
-// wc.js - 捕获王朝账户详情接口的请求头和响应体（只更新已存在账号）
+// wc.js - 王朝账号更新器 (只更新已存在账号，保留密码)
 (function() {
     'use strict';
-    
+
     const STORAGE_KEY = 'WangChao';
     const TARGET_URL = 'https://vapp.taizhou.com.cn/api/user_mumber/account_detail';
-    
-    console.log(`[WangChao] ========== 捕获请求 ==========`);
-    
+
+    // --- 1. 确认请求目标 ---
     if (!$request || $request.url.indexOf(TARGET_URL) === -1) {
         $done({});
         return;
     }
-    
-    console.log(`[WangChao] 请求方法: ${$request.method || 'UNKNOWN'}`);
-    
-    try {
-        // 获取请求头部信息
-        const headers = $request.headers;
-        let userAgent = headers['User-Agent'] || headers['user-agent'] || '';
-        let xSessionId = headers['X-SESSION-ID'] || headers['X-Session-Id'] || headers['x-session-id'] || '';
-        let xRequestId = headers['X-REQUEST-ID'] || headers['X-Request-Id'] || headers['x-request-id'] || '';
-        let xTimestamp = headers['X-TIMESTAMP'] || headers['X-Timestamp'] || headers['x-timestamp'] || '';
-        let xSignature = headers['X-SIGNATURE'] || headers['X-Signature'] || headers['x-signature'] || '';
-        let xTenantId = headers['X-TENANT-ID'] || headers['X-Tenant-Id'] || headers['x-tenant-id'] || '';
-        
-        // 获取响应体
-        const responseBody = $response.body;
-        if (!responseBody) {
-            console.log('[WangChao] 响应体为空');
-            $done({});
-            return;
-        }
-        
-        let jsonData;
-        try {
-            jsonData = JSON.parse(responseBody);
-        } catch (e) {
-            console.log('[WangChao] JSON解析失败');
-            $done({});
-            return;
-        }
-        
-        // 提取手机号 - 关键：data.rst.mobile
-        let mobile = '';
-        if (jsonData.data && jsonData.data.rst && jsonData.data.rst.mobile) {
-            mobile = jsonData.data.rst.mobile;
-            console.log(`[WangChao] 从 data.rst.mobile 提取手机号: ${mobile}`);
-        } else if (jsonData.data && jsonData.data.mobile) {
-            mobile = jsonData.data.mobile;
-            console.log(`[WangChao] 从 data.mobile 提取手机号: ${mobile}`);
-        } else if (jsonData.mobile) {
-            mobile = jsonData.mobile;
-            console.log(`[WangChao] 从 mobile 提取手机号: ${mobile}`);
-        }
-        
-        if (!mobile) {
-            console.log('[WangChao] 未找到手机号，跳过更新');
-            $done({});
-            return;
-        }
-        
-        // 获取存储的数据
-        let storedData = $prefs.valueForKey(STORAGE_KEY) || '';
-        if (!storedData) {
-            console.log('[WangChao] BoxJS中无数据，跳过更新');
-            $done({});
-            return;
-        }
-        
-        let dataArray = storedData.split('\n').filter(function(item) {
-            return item.trim() !== '';
-        });
-        
-        let existingIndex = -1;
-        let oldPassword = '';
-        
-        // 查找是否存在该手机号
-        for (var i = 0; i < dataArray.length; i++) {
-            var parts = dataArray[i].split('&');
-            if (parts.length >= 1 && parts[0] === mobile) {
-                existingIndex = i;
-                oldPassword = parts[1] || '';
-                console.log('[WangChao] 找到已存在账号，索引: ' + i);
-                break;
-            }
-        }
-        
-        // 如果不存在，跳过
-        if (existingIndex === -1) {
-            console.log('[WangChao] 手机号 ' + mobile + ' 不在列表中，跳过更新');
-            $notify("⚠️ 王朝", "未找到账号", "手机号 " + mobile + " 不在列表中");
-            $done({});
-            return;
-        }
-        
-        // 更新数据
-        var newData = mobile + '&' + oldPassword + '&' + userAgent + '&' + xSessionId + '&' + xRequestId + '&' + xTimestamp + '&' + xSignature + '&' + xTenantId;
-        dataArray[existingIndex] = newData;
-        $prefs.setValueForKey(dataArray.join('\n'), STORAGE_KEY);
-        
-        console.log('[WangChao] 更新成功，手机号: ' + mobile);
-        $notify("✅ 王朝数据已更新", "手机号: " + mobile, "账号数: " + dataArray.length);
-        
-    } catch (error) {
-        console.log('[WangChao] 错误: ' + error);
+
+    // --- 2. 获取请求头 (需要更新的新数据) ---
+    const headers = $request.headers;
+    const newUserAgent = headers['User-Agent'] || '';
+    const newXSessionId = headers['X-SESSION-ID'] || headers['X-Session-Id'] || '';
+    const newXRequestId = headers['X-REQUEST-ID'] || headers['X-Request-Id'] || '';
+    const newXTimestamp = headers['X-TIMESTAMP'] || headers['X-Timestamp'] || '';
+    const newXSignature = headers['X-SIGNATURE'] || headers['X-Signature'] || '';
+    const newXTenantId = headers['X-TENANT-ID'] || headers['X-Tenant-Id'] || '';
+
+    // --- 3. 获取响应体 (用于定位账号的手机号) ---
+    const responseBody = $response.body;
+    if (!responseBody) {
+        console.log('[WangChao] 错误: 响应体为空');
+        $done({});
+        return;
     }
-    
-    $done({})();
+
+    // 解析 JSON 并提取手机号
+    let mobile = null;
+    try {
+        const jsonData = JSON.parse(responseBody);
+        // 手机号可能在 data.rst.mobile 路径下
+        if (jsonData && jsonData.data && jsonData.data.rst && jsonData.data.rst.mobile) {
+            mobile = jsonData.data.rst.mobile;
+        }
+        // 兼容其他可能的路径
+        else if (jsonData && jsonData.data && jsonData.data.mobile) {
+            mobile = jsonData.data.mobile;
+        }
+        else if (jsonData && jsonData.mobile) {
+            mobile = jsonData.mobile;
+        }
+    } catch (e) {
+        console.log('[WangChao] 错误: 响应体JSON解析失败');
+        $done({});
+        return;
+    }
+
+    if (!mobile) {
+        console.log('[WangChao] 错误: 未能从响应中提取到手机号(mobile)');
+        $done({});
+        return;
+    }
+    console.log(`[WangChao] 从响应中提取到手机号: ${mobile}`);
+
+    // --- 4. 读取 BoxJS 并查找账号 ---
+    let storedData = $prefs.valueForKey(STORAGE_KEY) || '';
+    if (!storedData) {
+        console.log('[WangChao] BoxJS 中没有数据，跳过更新');
+        $done({});
+        return;
+    }
+
+    let accounts = storedData.split('\n').filter(line => line.trim() !== '');
+    let targetIndex = -1;
+    let oldPassword = '';
+
+    // 按行查找匹配的手机号
+    for (let i = 0; i < accounts.length; i++) {
+        const fields = accounts[i].split('&');
+        if (fields.length > 0 && fields[0] === mobile) {
+            targetIndex = i;
+            // 密码是第二个字段，必须保留
+            oldPassword = fields[1] || '';
+            console.log(`[WangChao] 找到手机号 ${mobile} 的旧记录，密码已保留`);
+            break;
+        }
+    }
+
+    // --- 5. 执行更新或跳过 ---
+    if (targetIndex === -1) {
+        console.log(`[WangChao] 手机号 ${mobile} 不存在于 BoxJS 中，跳过添加操作`);
+        $notify("⚠️ 王朝助手", "未找到账号", `手机号 ${mobile}\n不在您的账号列表中，已跳过添加。`);
+        $done({});
+        return;
+    }
+
+    // 组装新数据，格式: 手机号&密码&User-Agent&X-SESSION-ID&X-REQUEST-ID&X-TIMESTAMP&X-SIGNATURE&X-TENANT-ID
+    const newData = [
+        mobile,
+        oldPassword,
+        newUserAgent,
+        newXSessionId,
+        newXRequestId,
+        newXTimestamp,
+        newXSignature,
+        newXTenantId
+    ].join('&');
+
+    // 更新数组
+    accounts[targetIndex] = newData;
+
+    // 保存回 BoxJS
+    $prefs.setValueForKey(accounts.join('\n'), STORAGE_KEY);
+
+    console.log(`[WangChao] 成功更新手机号 ${mobile} 的请求头信息`);
+    $notify("✅ 王朝助手", "账号数据已更新", `手机号: ${mobile}\n账号总数: ${accounts.length}`);
+
+    $done({});
 })();
