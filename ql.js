@@ -18,6 +18,7 @@ const TOKEN_CONFIG = [
     { boxjsKey: 'jyxr', qlEnvName: 'wqwl_jyxe', remarks: '旧衣小二从Boxjs同步' },
     { boxjsKey: 'ddyx', qlEnvName: 'ddyxjyfhs', remarks: '铛铛一下从Boxjs同步' },
     { boxjsKey: 'kyh', qlEnvName: 'kyh', remarks: '康养汇从Boxjs同步' },
+    { boxjsKey: 'xiyun', qlEnvName: 'XIYUN_YANXUAN', remarks: '溪云严选从Boxjs同步' },
     { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛会员俱乐部从Boxjs同步' }
 ];
 
