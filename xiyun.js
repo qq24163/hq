@@ -7,6 +7,7 @@ hostname = cid-cps-api.heliang.cc
 ^https:\/\/cid-cps-api\.heliang\.cc\/coin\/withdrawal-list url script-request-header https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/xiyun.js
 */
 // xiyun.js - 捕获喜运POST请求头中的x-token、x-web-id、scene
+// 根据 x-web-id 判断和更新对应账号
 (function() {
     'use strict';
     
@@ -24,7 +25,7 @@ hostname = cid-cps-api.heliang.cc
     console.log(`[Xiyun] 请求方法: ${requestMethod}`);
     console.log(`[Xiyun] 请求URL: ${$request.url}`);
     
-    // 只处理POST请求（可选，也可以处理所有请求）
+    // 只处理POST请求
     if (requestMethod !== 'POST') {
         console.log('[Xiyun] 非POST请求，跳过处理');
         $done({});
@@ -40,21 +41,13 @@ hostname = cid-cps-api.heliang.cc
             return;
         }
         
-        // 打印所有请求头（调试用）
-        console.log('[Xiyun] 请求头列表:');
-        for (let key in headers) {
-            if (key.toLowerCase().includes('token') || key.toLowerCase().includes('web') || key.toLowerCase().includes('scene')) {
-                console.log(`  ${key}: ${headers[key]}`);
-            }
-        }
-        
-        // 获取x-token（尝试多种大小写）
+        // 获取x-token
         let xToken = headers['x-token'] || 
                      headers['X-Token'] || 
                      headers['X_TOKEN'] || 
                      headers['x_token'] || '';
         
-        // 获取x-web-id（尝试多种大小写）
+        // 获取x-web-id（用于判断的唯一标识）
         let xWebId = headers['x-web-id'] || 
                      headers['X-Web-Id'] || 
                      headers['X_WEB_ID'] || 
@@ -62,44 +55,33 @@ hostname = cid-cps-api.heliang.cc
                      headers['xwebid'] || 
                      headers['XWebId'] || '';
         
-        // 获取scene（尝试多种大小写）
+        // 获取scene
         let scene = headers['scene'] || 
                     headers['Scene'] || 
                     headers['SCENE'] || '';
         
-        // 详细日志
-        if (xToken) {
-            console.log(`[Xiyun] ✅ x-token: ${xToken.substring(0, 30)}...`);
-        } else {
-            console.log('[Xiyun] ❌ 未找到x-token');
-        }
-        
-        if (xWebId) {
-            console.log(`[Xiyun] ✅ x-web-id: ${xWebId.substring(0, 30)}...`);
-        } else {
-            console.log('[Xiyun] ❌ 未找到x-web-id');
-        }
-        
-        if (scene) {
-            console.log(`[Xiyun] ✅ scene: ${scene.substring(0, 30)}...`);
-        } else {
-            console.log('[Xiyun] ❌ 未找到scene');
-        }
+        console.log(`[Xiyun] x-token: ${xToken ? xToken.substring(0, 30) + '...' : '未找到'}`);
+        console.log(`[Xiyun] x-web-id: ${xWebId ? xWebId.substring(0, 30) + '...' : '未找到'}`);
+        console.log(`[Xiyun] scene: ${scene ? scene.substring(0, 30) + '...' : '未找到'}`);
         
         // 检查必要字段
-        if (!xToken) {
-            console.log('[Xiyun] 缺少必要字段 x-token，跳过保存');
-            $notify("⚠️ 喜运", "缺少必要字段", "未找到 x-token，请检查请求头");
+        if (!xWebId) {
+            console.log('[Xiyun] 缺少必要字段 x-web-id，跳过保存');
+            $notify("⚠️ 喜运", "缺少必要字段", "未找到 x-web-id，请检查请求头");
             $done({});
             return;
+        }
+        
+        if (!xToken) {
+            console.log('[Xiyun] 缺少 x-token，仍保存但token为空');
         }
         
         // 格式化数据：x-token#x-web-id@scene
         const newData = `${xToken}#${xWebId}@${scene}`;
         console.log(`[Xiyun] 格式化数据: ${newData.substring(0, 80)}`);
         
-        // 管理多账号
-        manageXiyunData(xToken, newData);
+        // 根据 x-web-id 管理多账号
+        manageXiyunData(xWebId, newData);
         
     } catch (error) {
         console.log(`[Xiyun] 错误: ${error}`);
@@ -107,7 +89,7 @@ hostname = cid-cps-api.heliang.cc
     
     $done({});
     
-    function manageXiyunData(xToken, newData) {
+    function manageXiyunData(xWebId, newData) {
         // 获取已存储的数据
         let storedData = $prefs.valueForKey(STORAGE_KEY) || '';
         console.log(`[Xiyun] 当前存储: ${storedData || '(空)'}`);
@@ -115,18 +97,22 @@ hostname = cid-cps-api.heliang.cc
         // 解析现有数据（按&分隔）
         let dataArray = storedData ? storedData.split('&').filter(item => item.trim() !== '') : [];
         
-        // 检查是否已存在相同的x-token
+        // 根据 x-web-id 查找是否已存在
+        // 数据格式：x-token#x-web-id@scene
         let existingIndex = -1;
+        let oldData = '';
         
         for (let i = 0; i < dataArray.length; i++) {
             const item = dataArray[i];
-            // 格式：x-token#x-web-id@scene
-            const tokenEndIndex = item.indexOf('#');
-            if (tokenEndIndex !== -1) {
-                const storedToken = item.substring(0, tokenEndIndex);
-                if (storedToken === xToken) {
+            // 提取 # 和 @ 之间的 x-web-id
+            const hashIndex = item.indexOf('#');
+            const atIndex = item.indexOf('@');
+            if (hashIndex !== -1 && atIndex !== -1) {
+                const storedWebId = item.substring(hashIndex + 1, atIndex);
+                if (storedWebId === xWebId) {
                     existingIndex = i;
-                    console.log(`[Xiyun] 找到相同x-token，索引: ${i}`);
+                    oldData = item;
+                    console.log(`[Xiyun] 找到相同x-web-id: ${xWebId.substring(0, 20)}...，索引: ${i}`);
                     break;
                 }
             }
@@ -135,15 +121,22 @@ hostname = cid-cps-api.heliang.cc
         let action = '';
         
         if (existingIndex === -1) {
-            // 新的x-token，添加到数组末尾
+            // 新的x-web-id，添加到数组末尾
             dataArray.push(newData);
             action = '添加';
-            console.log(`[Xiyun] 添加新账号`);
+            console.log(`[Xiyun] 添加新账号，x-web-id: ${xWebId.substring(0, 20)}...`);
         } else {
-            // 已存在x-token，更新数据
-            dataArray[existingIndex] = newData;
-            action = '更新';
-            console.log(`[Xiyun] 更新已有账号`);
+            // 已存在x-web-id，更新数据
+            if (oldData !== newData) {
+                dataArray[existingIndex] = newData;
+                action = '更新';
+                console.log(`[Xiyun] 更新已有账号，x-web-id: ${xWebId.substring(0, 20)}...`);
+            } else {
+                action = '跳过';
+                console.log(`[Xiyun] 数据未变化，跳过保存`);
+                $done({});
+                return;
+            }
         }
         
         // 保存到BoxJS，用&分隔
@@ -152,7 +145,7 @@ hostname = cid-cps-api.heliang.cc
         
         // 发送通知
         const title = action === '添加' ? "✅ 喜运账号已添加" : "🔄 喜运数据已更新";
-        const subtitle = `x-token: ${xToken.substring(0, 15)}...`;
+        const subtitle = `x-web-id: ${xWebId.substring(0, 15)}...`;
         const message = `当前账号数: ${dataArray.length}`;
         
         $notify(title, subtitle, message);
@@ -164,10 +157,12 @@ hostname = cid-cps-api.heliang.cc
         }
         
         console.log(`[Xiyun] 保存成功，当前共 ${dataArray.length} 个账号`);
-        console.log(`[Xiyun] 存储格式: x-token#x-web-id@scene&x-token2#x-web-id2@scene2`);
+        console.log(`[Xiyun] 存储格式: x-token#x-web-id@scene&...`);
         dataArray.forEach((item, index) => {
-            const tokenPart = item.split('#')[0];
-            console.log(`  ${index + 1}. x-token: ${tokenPart?.substring(0, 30)}...`);
+            const hashIndex = item.indexOf('#');
+            const atIndex = item.indexOf('@');
+            const webId = (hashIndex !== -1 && atIndex !== -1) ? item.substring(hashIndex + 1, atIndex) : 'unknown';
+            console.log(`  ${index + 1}. x-web-id: ${webId.substring(0, 30)}...`);
         });
     }
 })();
