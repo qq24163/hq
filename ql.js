@@ -17,9 +17,9 @@ const TOKEN_CONFIG = [
     { boxjsKey: 'YINYU', qlEnvName: 'wqwl_new_yinyu', remarks: '新银鱼通用从Boxjs同步' },
     { boxjsKey: 'jyxr', qlEnvName: 'wqwl_jyxe', remarks: '旧衣小二从Boxjs同步' },
     { boxjsKey: 'ddyx', qlEnvName: 'ddyxjyfhs', remarks: '铛铛一下从Boxjs同步' },
-    { boxjsKey: 'kyh', qlEnvName: 'kyh', remarks: '康养汇从Boxjs同步' },
+    { boxjsKey: 'pingme_accounts_v1', qlEnvName: 'pingme_accounts', remarks: 'pingme从Boxjs同步' },
+    { boxjsKey: 'wetalk_accounts_v1', qlEnvName: 'wetalk_accounts', remarks: 'wetalk从Boxjs同步' },
     { boxjsKey: 'xiyun', qlEnvName: 'XIYUN_YANXUAN', remarks: '溪云严选从Boxjs同步' },
-    { boxjsKey: 'dtb', qlEnvName: 'dtbypmb', remarks: '多提宝从Boxjs同步' },
     { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛会员俱乐部从Boxjs同步' }
 ];
 
