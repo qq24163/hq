@@ -5,15 +5,17 @@
 hostname = feima.zhisongshu.cn
 
 [rewrite_local]
-# 袋鼠平台 token 和手机号捕获
+# 袋鼠平台 token 和手机号捕获（合并版）
 ^https:\/\/feima\.zhisongshu\.cn\/api\/5dca57afa379e\?m=getUserInfo url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/daishu.js
 */
-// daishu.js - 捕获袋鼠平台的 access-token、user-token 和手机号
+// daishu.js - 捕获袋鼠平台的 access-token、user-token 和手机号（合并版）
 (function() {
     'use strict';
     
-    function manageDaishuData(accessToken, userToken, phone) {
-        const STORAGE_KEY = 'daishu';
+    const STORAGE_KEY = 'daishu';
+    const TEMP_KEY = 'daishu_temp';
+    
+    function saveData(accessToken, userToken, phone) {
         const storedData = $prefs.valueForKey(STORAGE_KEY) || '';
         let recordsArray = storedData ? storedData.split('&').filter(r => r.trim() !== '') : [];
         
@@ -29,7 +31,6 @@ hostname = feima.zhisongshu.cn
             if (existingPhone === phone) {
                 isNewRecord = false;
                 accountNumber = i + 1;
-                // 更新为最新记录
                 recordsArray[i] = newRecord;
                 break;
             }
@@ -52,72 +53,72 @@ hostname = feima.zhisongshu.cn
         
         console.log(`[DAISHU] 保存记录: ${newRecord}`);
         console.log(`[DAISHU] 当前共存储 ${recordsArray.length} 个账号`);
+        
+        // 复制到剪贴板
+        if (typeof $tool !== 'undefined' && $tool.copy) {
+            $tool.copy(newRecord);
+        }
     }
     
     try {
-        // 方法1：尝试从 $response 获取原始请求头
-        let accessToken = null;
-        let userToken = null;
-        
-        // 打印调试信息
-        console.log('[DAISHU] 脚本开始执行');
-        console.log('[DAISHU] $response 类型: ' + typeof $response);
-        
-        // 尝试多种方式获取请求头
-        if ($response && $response.request) {
-            console.log('[DAISHU] $response.request 存在');
-            accessToken = $response.request.headers['access-token'] || $response.request.headers['Access-Token'];
-            userToken = $response.request.headers['user-token'] || $response.request.headers['User-Token'];
-        }
-        
-        if (!accessToken && $request) {
-            console.log('[DAISHU] 尝试从 $request 获取');
-            accessToken = $request.headers['access-token'] || $request.headers['Access-Token'];
-            userToken = $request.headers['user-token'] || $request.headers['User-Token'];
-        }
-        
-        if (!accessToken) {
-            console.log('[DAISHU] 无法获取 access-token，放弃执行');
-            $done({});
-            return;
-        }
-        
-        // 解析响应体
-        let body = null;
+        // ========== 处理响应体（获取手机号） ==========
         if ($response && $response.body) {
-            body = $response.body;
-        } else if ($request && $request.body) {
-            // 如果是从请求中获取
-            body = $request.body;
+            console.log('[DAISHU] 处理响应体');
+            
+            const body = $response.body;
+            const responseData = JSON.parse(body);
+            
+            if (responseData.code === 1 && responseData.data && responseData.data.phone) {
+                const phone = responseData.data.phone;
+                console.log(`[DAISHU] 捕获到手机号: ${phone}`);
+                
+                // 从临时存储获取 token
+                const tempDataStr = $prefs.valueForKey(TEMP_KEY);
+                if (tempDataStr) {
+                    const tempData = JSON.parse(tempDataStr);
+                    const accessToken = tempData.accessToken;
+                    const userToken = tempData.userToken;
+                    
+                    if (accessToken && userToken) {
+                        saveData(accessToken, userToken, phone);
+                        // 清除临时数据
+                        $prefs.removeValueForKey(TEMP_KEY);
+                    } else {
+                        console.log('[DAISHU] 临时数据中 token 不完整');
+                    }
+                } else {
+                    console.log('[DAISHU] 未找到临时存储的 token，可能请求脚本未执行');
+                }
+            } else {
+                console.log('[DAISHU] 响应体中没有手机号或 code 不为1');
+            }
         }
         
-        if (!body) {
-            console.log('[DAISHU] 响应体为空');
-            $done({});
-            return;
+        // ========== 处理请求头（获取 token） ==========
+        // 注意：在 script-response-body 中，$request 也可以访问
+        if ($request && $request.headers) {
+            console.log('[DAISHU] 处理请求头');
+            
+            const accessToken = $request.headers['access-token'] || $request.headers['Access-Token'];
+            const userToken = $request.headers['user-token'] || $request.headers['User-Token'];
+            
+            if (accessToken && userToken) {
+                console.log('[DAISHU] 捕获到 token，暂存到临时变量');
+                
+                // 存储到临时变量，等响应体回来后再合并保存
+                $prefs.setValueForKey(JSON.stringify({
+                    accessToken: accessToken,
+                    userToken: userToken,
+                    timestamp: Date.now()
+                }), TEMP_KEY);
+            } else {
+                console.log('[DAISHU] 未找到完整的 token 信息');
+            }
         }
-        
-        console.log('[DAISHU] 响应体原始内容: ' + body.substring(0, 200));
-        
-        const responseData = JSON.parse(body);
-        
-        if (responseData.code !== 1 || !responseData.data || !responseData.data.phone) {
-            console.log('[DAISHU] 响应体中没有手机号或code不为1');
-            $done({});
-            return;
-        }
-        
-        const phone = responseData.data.phone;
-        
-        console.log(`[DAISHU] 捕获到 access-token: ${accessToken.substring(0, 30)}...`);
-        console.log(`[DAISHU] 捕获到 user-token: ${userToken.substring(0, 30)}...`);
-        console.log(`[DAISHU] 捕获到手机号: ${phone}`);
-        
-        manageDaishuData(accessToken, userToken, phone);
         
     } catch (error) {
         console.log(`[DAISHU] 错误: ${error}`);
-        console.log(`[DAISHU] 错误详情: ${error.stack}`);
+        console.log(`[DAISHU] 错误堆栈: ${error.stack}`);
     }
     
     $done({});
