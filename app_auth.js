@@ -105,5 +105,5 @@ hostname = lm.api.sujh.net
         console.log(`[APP_AUTH] 错误: ${error}`);
     }
     
-    $done({})；
+    $done({});  // ← 这里必须是英文分号 ;
 })();
