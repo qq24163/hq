@@ -19,24 +19,22 @@ hostname = lmf.lvmifo.com
     // 保存数据到 BoxJS
     function saveData(accessToken, userToken, phone) {
         const storedData = $prefs.valueForKey(STORAGE_KEY) || '';
-        // 按换行符分割，过滤空行
-        let recordsArray = storedData ? storedData.split('\n').filter(r => r.trim() !== '') : [];
+        // 用 & 分隔
+        let recordsArray = storedData ? storedData.split('&').filter(r => r.trim() !== '') : [];
         
-        // 新记录格式: access-token#user-token#phone (顺序与袋鼠不同)
-        const newRecord = `${accessToken}#${userToken}#${phone}`;
+        // 新记录格式: phone#access-token#user-token
+        const newRecord = `${phone}#${accessToken}#${userToken}`;
         
         // 检查是否已存在相同 phone 的记录
         let isNewRecord = true;
         let accountNumber = recordsArray.length + 1;
         
         for (let i = 0; i < recordsArray.length; i++) {
-            const parts = recordsArray[i].split('#');
-            // 假设格式为 access-token#user-token#phone，phone 是第三个字段
-            const existingPhone = parts.length === 3 ? parts[2] : '';
+            const existingPhone = recordsArray[i].split('#')[0];
             if (existingPhone === phone) {
                 isNewRecord = false;
                 accountNumber = i + 1;
-                recordsArray[i] = newRecord; // 更新为最新记录
+                recordsArray[i] = newRecord;
                 break;
             }
         }
@@ -45,8 +43,8 @@ hostname = lmf.lvmifo.com
             recordsArray.push(newRecord);
         }
         
-        // 保存到 BoxJS，用换行符 \n 分隔
-        $prefs.setValueForKey(recordsArray.join('\n'), STORAGE_KEY);
+        // 保存到 BoxJS，用 & 分隔
+        $prefs.setValueForKey(recordsArray.join('&'), STORAGE_KEY);
         
         // 发送通知
         const action = isNewRecord ? "已添加" : "已更新";
@@ -59,7 +57,7 @@ hostname = lmf.lvmifo.com
         console.log(`[LVMF] 保存记录: ${newRecord}`);
         console.log(`[LVMF] 当前共存储 ${recordsArray.length} 个账号`);
         
-        // 复制到剪贴板（可选）
+        // 复制到剪贴板
         if (typeof $tool !== 'undefined' && $tool.copy) {
             $tool.copy(newRecord);
         }
@@ -73,7 +71,6 @@ hostname = lmf.lvmifo.com
             const body = $response.body;
             const responseData = JSON.parse(body);
             
-            // 注意：接口返回格式可能与袋鼠不同，这里判断 code 为 1 表示成功
             if (responseData.code === 1 && responseData.data && responseData.data.phone) {
                 const phone = responseData.data.phone;
                 console.log(`[LVMF] 捕获到手机号: ${phone}`);
@@ -87,13 +84,12 @@ hostname = lmf.lvmifo.com
                     
                     if (accessToken && userToken) {
                         saveData(accessToken, userToken, phone);
-                        // 清除临时数据
                         $prefs.removeValueForKey(TEMP_KEY);
                     } else {
                         console.log('[LVMF] 临时数据中 token 不完整');
                     }
                 } else {
-                    console.log('[LVMF] 未找到临时存储的 token，可能请求脚本未执行');
+                    console.log('[LVMF] 未找到临时存储的 token');
                 }
             } else {
                 console.log(`[LVMF] 响应体中没有手机号或 code 不为1 (code: ${responseData.code})`);
@@ -108,9 +104,8 @@ hostname = lmf.lvmifo.com
             const userToken = $request.headers['user-token'] || $request.headers['User-Token'];
             
             if (accessToken && userToken) {
-                console.log('[LVMF] 捕获到 token，暂存到临时变量');
+                console.log('[LVMF] 捕获到 token，暂存');
                 
-                // 存储到临时变量，等响应体回来后再合并保存
                 $prefs.setValueForKey(JSON.stringify({
                     accessToken: accessToken,
                     userToken: userToken,
