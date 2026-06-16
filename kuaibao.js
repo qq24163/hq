@@ -15,8 +15,8 @@ hostname = vues.dd1x.cn
     const TARGET_URL = 'https://vues.dd1x.cn/api/kuaibao/login/wx_login';
     const STORAGE_KEY = 'kuaibao';
     
-    // 检查是否是目标URL
-    if (!$response || $response.url.indexOf(TARGET_URL) === -1) {
+    // 使用 $request.url 判断（响应脚本中 $request 可用）
+    if (!$request || $request.url.indexOf(TARGET_URL) === -1) {
         $done({});
         return;
     }
@@ -51,13 +51,13 @@ hostname = vues.dd1x.cn
         // 管理多账号
         function manageKuaibaoToken(newToken) {
             const storedData = $prefs.valueForKey(STORAGE_KEY) || '';
-            let tokensArray = storedData ? storedData.split('&').filter(t => t.trim() !== '') : [];
+            let tokensArray = storedData ? storedData.split('&').filter(function(t) { return t.trim() !== ''; }) : [];
             
             // 检查是否已存在相同 token
-            let isNewToken = true;
-            let accountNumber = tokensArray.length + 1;
+            var isNewToken = true;
+            var accountNumber = tokensArray.length + 1;
             
-            for (let i = 0; i < tokensArray.length; i++) {
+            for (var i = 0; i < tokensArray.length; i++) {
                 if (tokensArray[i] === newToken) {
                     isNewToken = false;
                     accountNumber = i + 1;
@@ -71,9 +71,9 @@ hostname = vues.dd1x.cn
             }
             
             // 发送通知
-            const title = isNewToken ? "✅ 快报平台 token已添加" : "🔄 快报平台 token已存在";
-            const subtitle = `账号${accountNumber}`;
-            const message = `Token: ${newToken.substring(0, 25)}...\nopenid: ${openid}`;
+            var title = isNewToken ? "✅ 快报平台 token已添加" : "🔄 快报平台 token已存在";
+            var subtitle = "账号" + accountNumber;
+            var message = "Token: " + newToken.substring(0, 25) + "...\nopenid: " + openid;
             
             $notify(title, subtitle, message);
             
@@ -83,13 +83,13 @@ hostname = vues.dd1x.cn
                 console.log('[KUAIBAO] token已复制到剪贴板');
             }
             
-            console.log(`[KUAIBAO] 当前共存储 ${tokensArray.length} 个账号的token`);
+            console.log('[KUAIBAO] 当前共存储 ' + tokensArray.length + ' 个账号的token');
         }
         
         manageKuaibaoToken(token);
         
     } catch (error) {
-        console.log(`[KUAIBAO] 错误: ${error}`);
+        console.log('[KUAIBAO] 错误: ' + error);
     }
     
     $done({});
