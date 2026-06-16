@@ -6,54 +6,52 @@ hostname = lmf.lvmifo.com
 
 [rewrite_local]
 # lvmf 平台 token 和手机号捕获
-^https:\/\/lmf\.lvmifo\.com\/api\/5dca57afa379e\?m=getUserInfo url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/lvmf.js
+^https:\/\/lmf\.lvmifo\.com\/api\/5dca57afa379e\?m=geUserInfo url script-response-body https://raw.githubusercontent.com/qq24163/hq/refs/heads/main/lvmf.js
 */
 // lvmf.js - 捕获 lvmf 平台的 access-token、user-token 和手机号
 (function() {
     'use strict';
     
-    var TARGET_URL = 'https://lmf.lvmifo.com/api/5dca57afa379e?m=getUserInfo';
     var STORAGE_KEY = 'lvmf';
     
-    if (!$response) {
-        $done({});
-        return;
-    }
-    
-    if ($response.url.indexOf(TARGET_URL) === -1) {
-        $done({});
-        return;
-    }
-    
     try {
-        // 从响应中获取原始请求头
+        // 获取 access-token 和 user-token
         var accessToken = null;
         var userToken = null;
         
-        if ($response.request && $response.request.headers) {
-            accessToken = $response.request.headers['access-token'] || $response.request.headers['Access-Token'];
-            userToken = $response.request.headers['user-token'] || $response.request.headers['User-Token'];
-        }
-        
-        // 如果上面获取不到，尝试从 $request 获取
-        if (!accessToken && $request && $request.headers) {
+        // 尝试从 $request 获取请求头
+        if ($request && $request.headers) {
             accessToken = $request.headers['access-token'] || $request.headers['Access-Token'];
             userToken = $request.headers['user-token'] || $request.headers['User-Token'];
         }
         
+        // 如果从 $request 获取不到，尝试从 $response.request 获取
+        if (!accessToken && $response && $response.request && $response.request.headers) {
+            accessToken = $response.request.headers['access-token'] || $response.request.headers['Access-Token'];
+            userToken = $response.request.headers['user-token'] || $response.request.headers['User-Token'];
+        }
+        
         if (!accessToken || !userToken) {
             console.log('[LVMF] 未找到完整的 token 信息');
+            console.log('[LVMF] accessToken: ' + accessToken);
+            console.log('[LVMF] userToken: ' + userToken);
             $done({});
             return;
         }
         
-        // 解析响应体
-        var body = $response.body;
+        // 获取响应体
+        var body = null;
+        if ($response && $response.body) {
+            body = $response.body;
+        }
+        
         if (!body) {
             console.log('[LVMF] 响应体为空');
             $done({});
             return;
         }
+        
+        console.log('[LVMF] 响应体: ' + body.substring(0, 200));
         
         var responseData = JSON.parse(body);
         
@@ -89,7 +87,6 @@ hostname = lmf.lvmifo.com
                 if (existingPhone === phone) {
                     isNewRecord = false;
                     accountNumber = i + 1;
-                    // 更新为最新记录
                     recordsArray[i] = newRecord;
                     break;
                 }
@@ -123,7 +120,9 @@ hostname = lmf.lvmifo.com
         
     } catch (error) {
         console.log('[LVMF] 错误: ' + error);
-        console.log('[LVMF] 错误堆栈: ' + error.stack);
+        if (error.stack) {
+            console.log('[LVMF] 错误堆栈: ' + error.stack);
+        }
     }
     
     $done({});
