@@ -19,12 +19,10 @@ const TOKEN_CONFIG = [
     { boxjsKey: 'ddyx', qlEnvName: 'ddyxjyfhs', remarks: '铛铛一下从Boxjs同步' },
     { boxjsKey: 'pingme_accounts_v1', qlEnvName: 'pingme_accounts', remarks: 'pingme从Boxjs同步' },
     { boxjsKey: 'wetalk_accounts_v1', qlEnvName: 'wetalk_accounts', remarks: 'wetalk从Boxjs同步' },
-    { boxjsKey: 'lvyz', qlEnvName: 'LVYZ', remarks: '绿燕子从Boxjs同步' },
-    { boxjsKey: 'BXP', qlEnvName: 'BXP', remarks: '布小派从Boxjs同步' },
-    { boxjsKey: 'daishu', qlEnvName: 'daishu', remarks: '袋鼠从Boxjs同步' },
-    { boxjsKey: 'lvmf', qlEnvName: 'lvmf', remarks: '绿蜜蜂从Boxjs同步' },
+    { boxjsKey: 'daishu', qlEnvName: 'daishu1', remarks: '袋鼠从Boxjs同步' },
+    { boxjsKey: 'lvmf', qlEnvName: 'lvmf1', remarks: '绿蜜蜂从Boxjs同步' },
     { boxjsKey: 'lzsh', qlEnvName: 'lzsh', remarks: '乐仔生活从Boxjs同步' },
-    { boxjsKey: 'kuaibao', qlEnvName: 'kuaibao', remarks: '快宝从Boxjs同步' },
+    { boxjsKey: 'kuaibao', qlEnvName: 'kuaibao1', remarks: '快宝从Boxjs同步' },
     { boxjsKey: 'xiyun', qlEnvName: 'XIYUN_YANXUAN', remarks: '溪云严选从Boxjs同步' },
     { boxjsKey: 'RedBull', qlEnvName: 'RedBull', remarks: '红牛会员俱乐部从Boxjs同步' }
 ];
