@@ -11,9 +11,10 @@ hostname = client.app.coc.10086.cn
 -------------- 说明 --------------
 · 作用：抓 App 冷启动的 autoLogin 请求，提取整组续期模板 + xk（账号标识），
   按 yd_accounts.json 的 {name, env} 格式存进 QX（键名 ydapp）。
-· 多账号身份识别：**xk** —— 用 App 内置密钥 AES 解密 x-token 得到的 72 位 hex
-  账号标识，跨 body 轮换稳定不变（同一账号永远同一 xk）。
-  body 会因重新登录/票据轮换而变化，xk 不会 → 始终正确识别是哪个账号。
+· 多账号身份识别：**body**（autoLogin 请求体）——实测不同账号 body 不同、
+  xk 是设备级共享（同机所有账号同一个 xk），所以 body 才是账号唯一标识。
+  同账号重抓 body 不变 → 原地更新；切号重抓 body 不同 → 自动新增。
+  兜底：body 票据轮换时，如果 xk 只匹配一条 → 也识别为同账号更新。
 · 用法：QX「应用数据」看 ydapp 的值（或看通知后剪贴板已复制完整数组），
   粘贴进 yd_accounts.json 账号列表，补上 YD_PHONE 手机号即可。
 
@@ -197,23 +198,16 @@ hostname = client.app.coc.10086.cn
             'YD_GROUP_CODES': ''
         };
 
-        // ---- 多账号管理（按 xk 识别——同一账号永远同一 xk，body 变了也认得）----
+        // ---- 多账号管理（body = 账号级唯一标识；xk 是设备级共享，不做身份用）----
         var storedData = $prefs.valueForKey(STORAGE_KEY) || '[]';
         var arr;
         try { arr = JSON.parse(storedData); } catch (e) { arr = []; }
         if (!Array.isArray(arr)) arr = [];
 
         var idx = -1;
-        // 优先按 xk 匹配（精确），xk 解密失败时退回 body 匹配
-        if (xk) {
-            for (var i = 0; i < arr.length; i++) {
-                if (arr[i] && arr[i].env && arr[i].env.YD_XK === xk) { idx = i; break; }
-            }
-        }
-        if (idx === -1) {
-            for (var i = 0; i < arr.length; i++) {
-                if (arr[i] && arr[i].env && arr[i].env.YD_AUTOLOGIN_BODY === body) { idx = i; break; }
-            }
+        // body 不同 → 新账号；body 相同 → 同账号原地更新
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i] && arr[i].env && arr[i].env.YD_AUTOLOGIN_BODY === body) { idx = i; break; }
         }
 
         var isNew = (idx === -1);
